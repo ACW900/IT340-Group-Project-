@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create account — GameAtlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Sans:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="register.css" />
+</head>
+<body class="auth-body">
+
+  <!-- LEFT PANEL -->
+  <div class="left-panel register-panel">
+    <div class="grid-bg"></div>
+    <a href="index.html" class="left-logo">Game<span>Atlas</span></a>
+    <div class="left-content">
+      <h2>Join.<br/>Start saving <em>today</em>.</h2>
+      <p>Create your free account and instantly start tracking prices on the games you want.</p>
+    </div>
+    <div class="left-footer">© 2025 GameAtlas &nbsp;·&nbsp; Free forever</div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+    <div class="form-container">
+
+      <!-- FORM VIEW -->
+      <div id="formView">
+        <div class="form-header">
+          <h1>Create account</h1>
+          <p>Already have one? <a href="login.html">Log in →</a></p>
+        </div>
+
+        <div class="progress-bar">
+          <div class="progress-step active" id="step1"></div>
+          <div class="progress-step" id="step2"></div>
+          <div class="progress-step" id="step3"></div>
+        </div>
+
+        <div class="error-msg" id="errorMsg">
+          <span>⚠</span>
+          <span id="errorText">Please fix the errors above.</span>
+        </div>
+
+        <form id="registerForm" onsubmit="handleRegister(event)" novalidate>
+
+          <div class="form-two-col">
+            <div class="form-group">
+              <label for="fname">First name</label>
+              <div class="input-wrap">
+                <svg class="input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+                <input type="text" id="fname" name="fname" placeholder="First" autocomplete="given-name" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="lname">Last name</label>
+              <div class="input-wrap">
+                <svg class="input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+                <input type="text" id="lname" name="lname" placeholder="Last" autocomplete="family-name" />
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="username">Username</label>
+            <div class="input-wrap">
+              <svg class="input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12h18M3 6h18M3 18h18"/>
+              </svg>
+              <input type="text" id="username" name="username" placeholder="Username123"
+                autocomplete="username" oninput="checkUsername(this)" />
+              <span class="input-status" id="usernameStatus"></span>
+            </div>
+            <div class="field-hint">3–20 characters, letters/numbers/underscores</div>
+          </div>
+
+          <div class="form-group">
+            <label for="email">Email address</label>
+            <div class="input-wrap">
+              <svg class="input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+              </svg>
+              <input type="email" id="email" name="email" placeholder="you@example.com"
+                autocomplete="email" oninput="checkEmail(this)" />
+              <span class="input-status" id="emailStatus"></span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <div class="input-wrap">
+              <svg class="input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <input type="password" id="password" name="password" placeholder="••••••••"
+                autocomplete="new-password" oninput="checkPasswordStrength(this)" />
+            </div>
+            <div class="pw-strength">
+              <div class="pw-bars">
+                <div class="pw-bar" id="bar1"></div>
+                <div class="pw-bar" id="bar2"></div>
+                <div class="pw-bar" id="bar3"></div>
+                <div class="pw-bar" id="bar4"></div>
+              </div>
+              <span class="pw-label" id="pwLabel">Enter a password</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="confirm">Confirm password</label>
+            <div class="input-wrap">
+              <svg class="input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <input type="password" id="confirm" name="confirm" placeholder="••••••••"
+                autocomplete="new-password" oninput="checkConfirm(this)" />
+              <span class="input-status" id="confirmStatus"></span>
+            </div>
+          </div>
+
+          <div class="terms-wrap">
+            <input type="checkbox" id="terms" name="terms" />
+            <span class="terms-text">
+              I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>. I understand GameAtlas is free and my data is never sold.
+            </span>
+          </div>
+
+          <button type="submit" class="submit-btn">Create my account →</button>
+        </form>
+      </div>
+
+      <!-- SUCCESS VIEW -->
+      <div class="success-screen" id="successView">
+        <div class="success-icon">✓</div>
+        <h2>You're in!</h2>
+        <p>Welcome to GameAtlas. Start searching for games and building your wishlist.</p>
+        <a href="index.html" class="submit-btn" style="display:block;text-decoration:none;text-align:center;padding:0.9rem">
+          Go to homepage →
+        </a>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    function checkUsername(el) {
+      const v = el.value.trim();
+      const status = document.getElementById('usernameStatus');
+      if (!v) { el.className = ''; status.textContent = ''; return; }
+      const ok = /^[a-zA-Z0-9_]{3,20}$/.test(v);
+      el.className = ok ? 'valid' : 'invalid';
+      status.textContent = ok ? '✓' : '✗';
+      status.style.color = ok ? 'var(--green)' : 'var(--red)';
+      updateProgress();
+    }
+    function checkEmail(el) {
+      const v = el.value.trim();
+      const status = document.getElementById('emailStatus');
+      if (!v) { el.className = ''; status.textContent = ''; return; }
+      const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+      el.className = ok ? 'valid' : 'invalid';
+      status.textContent = ok ? '✓' : '✗';
+      status.style.color = ok ? 'var(--green)' : 'var(--red)';
+      updateProgress();
+    }
+    function checkPasswordStrength(el) {
+      const v = el.value;
+      let score = 0;
+      if (v.length >= 8) score++;
+      if (/[A-Z]/.test(v)) score++;
+      if (/[0-9]/.test(v)) score++;
+      if (/[^A-Za-z0-9]/.test(v)) score++;
+      const bars = ['bar1','bar2','bar3','bar4'].map(id => document.getElementById(id));
+      const classes = ['','weak','fair','good','strong'];
+      bars.forEach((b, i) => { b.className = 'pw-bar' + (i < score ? ' ' + classes[score] : ''); });
+      document.getElementById('pwLabel').textContent = v ? (['','Weak','Fair','Good','Strong'][score] || 'Weak') : 'Enter a password';
+      updateProgress();
+    }
+    function checkConfirm(el) {
+      const pw = document.getElementById('password').value;
+      const status = document.getElementById('confirmStatus');
+      if (!el.value) { el.className = ''; status.textContent = ''; return; }
+      const ok = el.value === pw;
+      el.className = ok ? 'valid' : 'invalid';
+      status.textContent = ok ? '✓' : '✗';
+      status.style.color = ok ? 'var(--green)' : 'var(--red)';
+    }
+    function updateProgress() {
+      const un = document.getElementById('username').className === 'valid';
+      const em = document.getElementById('email').className === 'valid';
+      const pw = document.getElementById('password').value.length >= 8;
+      document.getElementById('step1').className = 'progress-step' + (un ? ' done' : ' active');
+      document.getElementById('step2').className = 'progress-step' + (em ? ' done' : (un ? ' active' : ''));
+      document.getElementById('step3').className = 'progress-step' + (pw ? ' done' : (em ? ' active' : ''));
+    }
+    function handleRegister(e) {
+      e.preventDefault();
+      const fname    = document.getElementById('fname').value.trim();
+      const lname    = document.getElementById('lname').value.trim();
+      const username = document.getElementById('username').value.trim();
+      const email    = document.getElementById('email').value.trim();
+      const pw       = document.getElementById('password').value;
+      const confirm  = document.getElementById('confirm').value;
+      const terms    = document.getElementById('terms').checked;
+      const err      = document.getElementById('errorMsg');
+      if (!fname || !lname || !username || !email || !pw || !confirm) {
+        err.classList.add('visible');
+        document.getElementById('errorText').textContent = 'Please fill in all fields.';
+        return;
+      }
+      if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+        err.classList.add('visible');
+        document.getElementById('errorText').textContent = 'Username must be 3–20 chars: letters, numbers, underscores.';
+        return;
+      }
+      if (pw !== confirm) {
+        err.classList.add('visible');
+        document.getElementById('errorText').textContent = 'Passwords do not match.';
+        return;
+      }
+      if (!terms) {
+        err.classList.add('visible');
+        document.getElementById('errorText').textContent = 'Please accept the Terms of Service.';
+        return;
+      }
+      err.classList.remove('visible');
+      // Store session in localStorage
+      localStorage.setItem('ga_user', JSON.stringify({ email, name: username }));
+      document.getElementById('formView').style.display = 'none';
+      document.getElementById('successView').classList.add('visible');
+    }
+  </script>
+</body>
+</html>

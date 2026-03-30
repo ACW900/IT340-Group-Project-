@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GameAtlas — Track. Compare. Save.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Sans:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <a href="index.html" class="logo">Game<span>Atlas</span></a>
+    <div class="nav-actions" id="navActions">
+      <!-- Populated by JS based on auth state -->
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-tag">Live price tracking across 5 stores</div>
+    <h1>Find the best price.<br/>Play <em>more</em>, pay less.</h1>
+    <p>Search once, compare everywhere. GameAtlas tracks prices across Steam, Epic, GOG, Humble, and Green Man Gaming in real time.</p>
+    <div class="search-wrap">
+      <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input class="search-input" type="text" id="searchInput" placeholder="Search for a game — try &quot;Elden Ring&quot;" />
+      <button class="search-btn" onclick="searchGames()">Search</button>
+    </div>
+    <p class="search-hint">No account needed &nbsp;·&nbsp; <kbd>↵</kbd> to search</p>
+  </section>
+
+  <!-- STATS -->
+  <div class="stats-strip">
+    <div class="stat"><span class="stat-num">5</span><span class="stat-label">Stores monitored</span></div>
+    <div class="stat"><span class="stat-num">Real-time</span><span class="stat-label">Price updates</span></div>
+  </div>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- AUTH PROMPT — shown only when logged out -->
+    <div class="auth-prompt" id="authPrompt" style="display:none;">
+      <div class="auth-prompt-text">
+        <h3>Track your wishlist &amp; get alerts</h3>
+        <p>Create a free account to wishlist games and get notified when prices drop.</p>
+      </div>
+      <div class="auth-prompt-actions">
+        <a href="login.html" class="btn btn-ghost">Log in</a>
+        <a href="register.html" class="btn btn-accent">Create account →</a>
+      </div>
+    </div>
+
+    <!-- WISHLIST SECTION — shown only when logged in -->
+    <div id="wishlistSection" style="display:none;">
+      <div class="section-header">
+        <div class="section-title">Your wishlist <span id="wishlistCount"></span></div>
+        <button onclick="clearWishlist()" class="see-all" style="background:none;border:none;cursor:pointer;color:var(--red);">Clear all</button>
+      </div>
+      <div id="wishlistEmpty" style="display:none;padding:1.5rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:0.88rem;margin-bottom:2rem;">
+        Your wishlist is empty. Search for games below and click <strong>+ Wishlist</strong> to start tracking prices.
+      </div>
+      <div class="deals-grid" id="wishlistGrid"></div>
+    </div>
+
+    <!-- SEARCH RESULTS (hidden by default) -->
+    <div id="searchResults" style="display:none;">
+      <div class="section-header">
+        <div class="section-title">Search results <span id="searchResultsLabel"></span></div>
+        <button onclick="clearSearch()" class="see-all" style="background:none;border:none;cursor:pointer;">✕ Clear</button>
+      </div>
+      <div class="deals-grid" id="searchResultsGrid"></div>
+    </div>
+
+    <!-- HOT DEALS BY STORE -->
+    <div id="dealsSection">
+      <div class="section-header">
+        <div class="section-title">Hot deals by store <span id="dealsTimestamp">// loading...</span></div>
+        <a href="#" class="see-all" onclick="loadAllDeals(); return false;">Refresh →</a>
+      </div>
+      <div class="deals-grid" id="dealsGrid">
+        <div class="store-deal-card skeleton-card"><div class="skeleton-header"></div><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+        <div class="store-deal-card skeleton-card"><div class="skeleton-header"></div><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+        <div class="store-deal-card skeleton-card"><div class="skeleton-header"></div><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+        <div class="store-deal-card skeleton-card"><div class="skeleton-header"></div><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+        <div class="store-deal-card skeleton-card"><div class="skeleton-header"></div><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+      </div>
+    </div>
+
+    <!-- STORES BAR -->
+    <div class="section-header" style="margin-top:2rem;">
+      <div class="section-title">Tracked stores</div>
+    </div>
+    <div class="stores-bar">
+      <span class="stores-label">Comparing prices from</span>
+      <div class="store-pill"><span class="store-pill-dot" style="background:#1d9bf0"></span>Steam</div>
+      <div class="store-pill"><span class="store-pill-dot" style="background:#313131"></span>Epic Games</div>
+      <div class="store-pill"><span class="store-pill-dot" style="background:#b249c7"></span>GOG</div>
+      <div class="store-pill"><span class="store-pill-dot" style="background:#e87722"></span>Humble Bundle</div>
+      <div class="store-pill"><span class="store-pill-dot" style="background:#00a651"></span>Green Man Gaming</div>
+    </div>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer>
+    <a href="index.html" class="logo">Game<span>Atlas</span></a>
+    <span>© 2025 GameAtlas. All rights reserved.</span>
+    <span>Not affiliated with any store.</span>
+  </footer>
+
+  <script>
+    // ── CheapShark store ID map ───────────────────────────────────────────
+    const STORES = {
+      1:  { name: 'Steam',            color: '#1d9bf0' },
+      25: { name: 'Epic Games',       color: '#313131' },
+      7:  { name: 'GOG',              color: '#b249c7' },
+      11: { name: 'Humble Bundle',    color: '#e87722' },
+      23: { name: 'Green Man Gaming', color: '#00a651' },
+    };
+    const STORE_IDS = Object.keys(STORES).map(Number);
+
+    // ── Auth helpers ──────────────────────────────────────────────────────
+    function getUser()  { try { return JSON.parse(localStorage.getItem('ga_user')); } catch { return null; } }
+    function isLoggedIn() { return !!getUser(); }
+
+    function logout() {
+      localStorage.removeItem('ga_user');
+      location.reload();
+    }
+
+    // ── Wishlist helpers ──────────────────────────────────────────────────
+    function getWishlist() { try { return JSON.parse(localStorage.getItem('ga_wishlist')) || []; } catch { return []; } }
+    function saveWishlist(list) { localStorage.setItem('ga_wishlist', JSON.stringify(list)); }
+
+    function addToWishlist(game) {
+      const list = getWishlist();
+      if (list.find(g => g.gameID === game.gameID)) return; // already added
+      list.push(game);
+      saveWishlist(list);
+      renderWishlist();
+    }
+
+    function removeFromWishlist(gameID) {
+      saveWishlist(getWishlist().filter(g => g.gameID !== gameID));
+      renderWishlist();
+    }
+
+    function clearWishlist() {
+      if (!confirm('Remove all games from your wishlist?')) return;
+      saveWishlist([]);
+      renderWishlist();
+    }
+
+    function isWishlisted(gameID) {
+      return getWishlist().some(g => g.gameID === gameID);
+    }
+
+    // ── Render nav based on auth state ────────────────────────────────────
+    function renderNav() {
+      const nav = document.getElementById('navActions');
+      const user = getUser();
+      if (user) {
+        nav.innerHTML = `
+          <span style="font-size:0.82rem;color:var(--muted);">Hi, <strong style="color:var(--text)">${escHtml(user.name)}</strong></span>
+          <button onclick="logout()" class="btn btn-ghost">Log out</button>`;
+      } else {
+        nav.innerHTML = `
+          <a href="login.html" class="btn btn-ghost">Log in</a>
+          <a href="register.html" class="btn btn-accent">Sign up</a>`;
+      }
+    }
+
+    // ── Render auth prompt or wishlist section ────────────────────────────
+    function renderAuthState() {
+      if (isLoggedIn()) {
+        document.getElementById('authPrompt').style.display     = 'none';
+        document.getElementById('wishlistSection').style.display = 'block';
+        renderWishlist();
+      } else {
+        document.getElementById('authPrompt').style.display     = 'flex';
+        document.getElementById('wishlistSection').style.display = 'none';
+      }
+    }
+
+    // ── Render wishlist grid ──────────────────────────────────────────────
+    async function renderWishlist() {
+      const list  = getWishlist();
+      const grid  = document.getElementById('wishlistGrid');
+      const empty = document.getElementById('wishlistEmpty');
+      const count = document.getElementById('wishlistCount');
+
+      count.textContent = list.length ? `// ${list.length} game${list.length !== 1 ? 's' : ''}` : '';
+
+      if (!list.length) {
+        grid.innerHTML  = '';
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+
+      // Show skeletons while loading
+      grid.innerHTML = Array(list.length).fill(`
+        <div class="store-deal-card skeleton-card">
+          <div class="skeleton-header"></div>
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+        </div>`).join('');
+
+      const detailed = await Promise.allSettled(
+        list.map(g =>
+          fetch(`https://www.cheapshark.com/api/1.0/games?id=${g.gameID}`)
+            .then(r => r.json())
+            .then(data => ({ ...data, gameID: g.gameID }))
+        )
+      );
+
+      let html = '';
+      detailed.forEach(result => {
+        if (result.status !== 'fulfilled') return;
+        const game  = result.value;
+        const info  = game.info;
+        const deals = (game.deals || []).filter(d => STORES[parseInt(d.storeID)]);
+        if (!info || !deals.length) return;
+
+        const bestDeal  = deals.sort((a, b) => parseFloat(a.price) - parseFloat(b.price))[0];
+        const storeInfo = STORES[parseInt(bestDeal.storeID)];
+        const salePrice = bestDeal ? (parseFloat(bestDeal.price) === 0 ? 'FREE' : `$${parseFloat(bestDeal.price).toFixed(2)}`) : 'N/A';
+        const savings   = bestDeal ? Math.round((1 - parseFloat(bestDeal.price) / parseFloat(bestDeal.retailPrice)) * 100) : 0;
+
+        html += `
+          <div class="store-deal-card">
+            <div class="store-deal-header" style="gap:0.75rem;align-items:flex-start;padding:1rem 1.25rem;">
+              ${info.thumb ? `<img src="${info.thumb}" alt="${escHtml(info.title)}" style="width:42px;height:42px;object-fit:cover;border-radius:6px;flex-shrink:0;">` : ''}
+              <div style="flex:1;min-width:0;">
+                <div class="store-deal-name" style="white-space:normal;font-size:0.88rem;">${escHtml(info.title)}</div>
+                ${storeInfo ? `<div style="font-size:0.7rem;color:var(--muted);margin-top:0.15rem;">Best on <span style="color:${storeInfo.color}">${storeInfo.name}</span></div>` : ''}
+              </div>
+              <button onclick="removeFromWishlist('${game.gameID}')"
+                style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;flex-shrink:0;"
+                title="Remove from wishlist">✕</button>
+            </div>
+            <div class="store-deal-list">
+              ${deals.slice(0, 3).map(d => {
+                const s   = STORES[parseInt(d.storeID)];
+                const sp  = parseFloat(d.price) === 0 ? 'FREE' : `$${parseFloat(d.price).toFixed(2)}`;
+                const sv  = Math.round((1 - parseFloat(d.price) / parseFloat(d.retailPrice)) * 100);
+                const url = `https://www.cheapshark.com/redirect?dealID=${d.dealID}`;
+                return `
+                  <a class="store-deal-row" href="${url}" target="_blank" rel="noopener">
+                    <div class="store-deal-thumb" style="background:var(--surface2);display:flex;align-items:center;justify-content:center;">
+                      <span style="width:8px;height:8px;border-radius:50%;background:${s.color}"></span>
+                    </div>
+                    <div class="store-deal-info">
+                      <div class="store-deal-title">${s.name}</div>
+                      <div class="store-deal-sub">Was $${parseFloat(d.retailPrice).toFixed(2)}</div>
+                    </div>
+                    <div class="store-deal-price">
+                      <span class="price-current">${sp}</span>
+                      ${sv > 0 ? `<span class="deal-badge">−${sv}%</span>` : ''}
+                    </div>
+                  </a>`;
+                }).join('')}
+            </div>
+          </div>`;
+      });
+
+      grid.innerHTML = html || '';
+    }
+
+    // ── Fetch deals for a single store ────────────────────────────────────
+    async function fetchStoreDeals(storeId, pageSize = 3) {
+      const url = `https://www.cheapshark.com/api/1.0/deals?storeID=${storeId}&pageSize=${pageSize}&sortBy=DealRating&onSale=1`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Store ${storeId} fetch failed`);
+      return res.json();
+    }
+
+    // ── Build a deal card ─────────────────────────────────────────────────
+    function buildDealCard(storeId, deals) {
+      const store = STORES[storeId];
+      if (!store) return '';
+
+      const rows = deals.map(d => {
+        const savings     = Math.round(parseFloat(d.savings));
+        const salePriceF  = parseFloat(d.salePrice);
+        const salePrice   = salePriceF === 0 ? 'FREE' : `$${salePriceF.toFixed(2)}`;
+        const normalPrice = `$${parseFloat(d.normalPrice).toFixed(2)}`;
+        const thumb       = d.thumb
+          ? `<img src="${d.thumb}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:5px;" onerror="this.style.display='none'">`
+          : `<div style="width:36px;height:36px;border-radius:5px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:1rem;">🎮</div>`;
+        const dealLink = `https://www.cheapshark.com/redirect?dealID=${d.dealID}`;
+
+        return `
+          <a class="store-deal-row" href="${dealLink}" target="_blank" rel="noopener" title="${d.title}">
+            <div class="store-deal-thumb">${thumb}</div>
+            <div class="store-deal-info">
+              <div class="store-deal-title">${escHtml(d.title)}</div>
+              <div class="store-deal-sub">Was ${normalPrice}</div>
+            </div>
+            <div class="store-deal-price">
+              <span class="price-current">${salePrice}</span>
+              <span class="deal-badge">−${savings}%</span>
+            </div>
+          </a>`;
+      }).join('');
+
+      return `
+        <div class="store-deal-card">
+          <div class="store-deal-header">
+            <span class="store-deal-dot" style="background:${store.color}"></span>
+            <span class="store-deal-name">${store.name}</span>
+            <span class="store-deal-count">${deals.length} deal${deals.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div class="store-deal-list">${rows}</div>
+        </div>`;
+    }
+
+    // ── Load all store deals ──────────────────────────────────────────────
+    async function loadAllDeals() {
+      const grid = document.getElementById('dealsGrid');
+      const ts   = document.getElementById('dealsTimestamp');
+
+      grid.innerHTML = Array(5).fill(`
+        <div class="store-deal-card skeleton-card">
+          <div class="skeleton-header"></div>
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+        </div>`).join('');
+      ts.textContent = '// loading...';
+
+      const results = await Promise.allSettled(
+        STORE_IDS.map(id => fetchStoreDeals(id, 3))
+      );
+
+      let html = '';
+      results.forEach((result, i) => {
+        const storeId = STORE_IDS[i];
+        if (result.status === 'fulfilled' && result.value.length > 0 && STORES[storeId]) {
+          html += buildDealCard(storeId, result.value);
+        }
+      });
+
+      grid.innerHTML = html || '<p style="color:var(--muted);padding:1rem;">No deals found.</p>';
+      ts.textContent = `// updated ${new Date().toLocaleTimeString()}`;
+    }
+
+    // ── Search games ──────────────────────────────────────────────────────
+    async function searchGames() {
+      const query = document.getElementById('searchInput').value.trim();
+      if (!query) return;
+
+      const resultsSection = document.getElementById('searchResults');
+      const resultsGrid    = document.getElementById('searchResultsGrid');
+      const label          = document.getElementById('searchResultsLabel');
+
+      resultsGrid.innerHTML = `<div style="color:var(--muted);padding:1rem;font-size:0.85rem;">Searching...</div>`;
+      resultsSection.style.display = 'block';
+      label.textContent = `// "${query}"`;
+      resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      try {
+        const res   = await fetch(`https://www.cheapshark.com/api/1.0/games?title=${encodeURIComponent(query)}&limit=12`);
+        const games = await res.json();
+
+        if (!games.length) {
+          resultsGrid.innerHTML = `<p style="color:var(--muted);padding:1rem;">No results for "<strong>${escHtml(query)}</strong>".</p>`;
+          return;
+        }
+
+        const detailed = await Promise.allSettled(
+          games.slice(0, 12).map(g =>
+            fetch(`https://www.cheapshark.com/api/1.0/games?id=${g.gameID}`)
+              .then(r => r.json())
+              .then(data => ({ ...data, gameID: g.gameID, cheapestPriceEver: g.cheapestPriceEver, thumb: g.thumb }))
+          )
+        );
+
+        let html = '';
+        detailed.forEach(result => {
+          if (result.status !== 'fulfilled') return;
+          const game  = result.value;
+          const info  = game.info;
+          const cheap = game.cheapestPriceEver;
+          const deals = (game.deals || []).filter(d => STORES[parseInt(d.storeID)]);
+          if (!info || !deals.length) return;
+
+          const bestDeal  = deals.sort((a, b) => parseFloat(a.price) - parseFloat(b.price))[0];
+          const storeInfo = STORES[parseInt(bestDeal.storeID)];
+          const wishlisted = isWishlisted(game.gameID);
+
+          html += `
+            <div class="store-deal-card search-result-card">
+              <div class="store-deal-header" style="gap:0.75rem;align-items:flex-start;padding:1rem 1.25rem;">
+                ${info.thumb ? `<img src="${info.thumb}" alt="${escHtml(info.title)}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0;">` : ''}
+                <div style="flex:1;min-width:0;">
+                  <div class="store-deal-name" style="white-space:normal;font-size:0.9rem;">${escHtml(info.title)}</div>
+                  ${storeInfo ? `<div style="font-size:0.7rem;color:var(--muted);margin-top:0.2rem;">Best on <span style="color:${storeInfo.color}">${storeInfo.name}</span></div>` : ''}
+                </div>
+                ${isLoggedIn() ? `
+                  <button
+                    id="wl-btn-${game.gameID}"
+                    onclick="toggleWishlist('${game.gameID}', '${escHtml(info.title)}', '${info.thumb || ''}')"
+                    class="wishlist-btn ${wishlisted ? 'wishlisted' : ''}"
+                    title="${wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}">
+                    ${wishlisted ? '★' : '☆'}
+                  </button>` : ''}
+              </div>
+              <div class="store-deal-list">
+                ${deals.slice(0, 3).map(d => {
+                  const s   = STORES[parseInt(d.storeID)];
+                  const sp  = parseFloat(d.price) === 0 ? 'FREE' : `$${parseFloat(d.price).toFixed(2)}`;
+                  const sv  = Math.round((1 - parseFloat(d.price) / parseFloat(d.retailPrice)) * 100);
+                  const url = `https://www.cheapshark.com/redirect?dealID=${d.dealID}`;
+                  return `
+                    <a class="store-deal-row" href="${url}" target="_blank" rel="noopener">
+                      <div class="store-deal-thumb" style="background:var(--surface2);display:flex;align-items:center;justify-content:center;">
+                        <span style="width:8px;height:8px;border-radius:50%;background:${s.color}"></span>
+                      </div>
+                      <div class="store-deal-info">
+                        <div class="store-deal-title">${s.name}</div>
+                        <div class="store-deal-sub">Was $${parseFloat(d.retailPrice).toFixed(2)}</div>
+                      </div>
+                      <div class="store-deal-price">
+                        <span class="price-current">${sp}</span>
+                        ${sv > 0 ? `<span class="deal-badge">−${sv}%</span>` : ''}
+                      </div>
+                    </a>`;
+                }).join('')}
+                ${cheap ? `<div style="padding:0.5rem 1.25rem;font-size:0.7rem;color:var(--muted);border-top:1px solid var(--border);margin-top:0.25rem;">
+                  All-time low: <span style="color:var(--green);font-family:'IBM Plex Mono',monospace;">$${parseFloat(cheap.price).toFixed(2)}</span>
+                </div>` : ''}
+              </div>
+            </div>`;
+        });
+
+        resultsGrid.innerHTML = html || `<p style="color:var(--muted);padding:1rem;">No deals found from tracked stores.</p>`;
+      } catch (err) {
+        resultsGrid.innerHTML = `<p style="color:var(--red);padding:1rem;">Error fetching results. Try again.</p>`;
+        console.error(err);
+      }
+    }
+
+    // ── Toggle wishlist from search results ───────────────────────────────
+    function toggleWishlist(gameID, title, thumb) {
+      const btn = document.getElementById(`wl-btn-${gameID}`);
+      if (isWishlisted(gameID)) {
+        removeFromWishlist(gameID);
+        btn.textContent = '☆';
+        btn.classList.remove('wishlisted');
+        btn.title = 'Add to wishlist';
+      } else {
+        addToWishlist({ gameID, title, thumb });
+        btn.textContent = '★';
+        btn.classList.add('wishlisted');
+        btn.title = 'Remove from wishlist';
+      }
+    }
+
+    // ── Clear search ──────────────────────────────────────────────────────
+    function clearSearch() {
+      document.getElementById('searchResults').style.display = 'none';
+      document.getElementById('searchInput').value = '';
+    }
+
+    // ── Escape HTML helper ────────────────────────────────────────────────
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+      renderNav();
+      renderAuthState();
+      loadAllDeals();
+      document.getElementById('searchInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') searchGames();
+      });
+    });
+  </script>
+
+</body>
+</html>

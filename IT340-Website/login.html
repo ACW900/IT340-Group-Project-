@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Log in — GameAtlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Sans:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="login.css" />
+</head>
+<body class="auth-body">
+
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+    <div class="grid-bg"></div>
+    <a href="index.html" class="left-logo">Game<span>Atlas</span></a>
+    <div class="left-content">
+      <h2>Track prices.<br/><em>Never</em> overpay.</h2>
+      <p>Sign back in to see your wishlisted games, latest price drops, and personalized deal alerts.</p>
+      <div class="feature-list">
+        <div class="feature-item"><div class="feature-dot">✓</div>Wishlist up to 100 games</div>
+        <div class="feature-item"><div class="feature-dot">✓</div>Compare prices across 5+ stores</div>
+        <div class="feature-item"><div class="feature-dot">✓</div>100% free — always</div>
+      </div>
+    </div>
+    <div class="left-footer">© 2025 GameAtlas &nbsp;·&nbsp; v1.0.0</div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+    <div class="form-container">
+
+      <div class="form-header">
+        <h1>Welcome back</h1>
+        <p>Don't have an account? <a href="register.html">Sign up free →</a></p>
+      </div>
+
+      <div class="error-msg" id="errorMsg">
+        <span>⚠</span>
+        <span id="errorText">Invalid email or password.</span>
+      </div>
+
+      <form id="loginForm" onsubmit="handleLogin(event)">
+
+        <div class="form-group">
+          <label for="email">Email address</label>
+          <div class="input-wrap">
+            <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+            </svg>
+            <input type="email" id="email" name="email" placeholder="you@example.com" autocomplete="email" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <div class="input-wrap">
+            <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" />
+            <button type="button" class="password-toggle" onclick="togglePw()">👁</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label class="checkbox-wrap" for="remember">
+            <input type="checkbox" id="remember" name="remember" />
+            <span class="checkbox-label">Remember me</span>
+          </label>
+          <a href="#" class="forgot-link">Forgot password?</a>
+        </div>
+
+        <button type="submit" class="submit-btn">Log in to GameAtlas</button>
+      </form>
+
+    </div>
+  </div>
+
+  <script>
+    function togglePw() {
+      const pw = document.getElementById('password');
+      pw.type = pw.type === 'password' ? 'text' : 'password';
+    }
+    function handleLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('email').value.trim();
+      const pw    = document.getElementById('password').value;
+      const err   = document.getElementById('errorMsg');
+      if (!email || !pw) {
+        err.classList.add('visible');
+        document.getElementById('errorText').textContent = 'Please fill in all fields.';
+        return;
+      }
+      err.classList.remove('visible');
+      // Store session in localStorage
+      localStorage.setItem('ga_user', JSON.stringify({ email, name: email.split('@')[0] }));
+      window.location.href = 'index.html';
+    }
+  </script>
+</body>
+</html>
