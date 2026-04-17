@@ -9,6 +9,32 @@
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Sans:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="index.css" />
+  <style>
+    .cache-banner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      padding: 0.5rem 1.5rem;
+      background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid var(--green);
+      font-size: 0.85rem;
+      color: var(--muted);
+      transition: border-color 0.3s;
+    }
+    .refresh-btn {
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 0.25rem 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: background 0.2s;
+    }
+    .refresh-btn:hover { background: var(--accent); color: #000; }
+    .refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  </style>
 </head>
 <body>
 
@@ -19,6 +45,12 @@
       <!-- Populated by JS based on auth state -->
     </div>
   </nav>
+
+  <!-- CACHE BANNER -->
+  <div id="cacheBanner" style="display:none;" class="cache-banner">
+    <span id="cacheAgeText">Data cached</span>
+    <button onclick="refreshDeals()" id="refreshBtn" class="refresh-btn" style="display:none;">↻ Refresh Now</button>
+  </div>
 
   <!-- HERO -->
   <section class="hero">
@@ -81,7 +113,6 @@
     <div id="dealsSection">
       <div class="section-header">
         <div class="section-title">Hot deals by store <span id="dealsTimestamp">// loading...</span></div>
-        <a href="#" class="see-all" onclick="loadAllDeals(); return false;">Refresh →</a>
       </div>
       <div class="deals-grid" id="dealsGrid">
         <div class="store-deal-card skeleton-card"><div class="skeleton-header"></div><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
@@ -115,6 +146,10 @@
   </footer>
 
   <script>
+    // ── Config ────────────────────────────────────────────────────────────
+    const BACKEND      = 'http://BACKEND_MACHINE_IP:3000';
+    const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
     // ── CheapShark store ID map ───────────────────────────────────────────
     const STORES = {
       1:  { name: 'Steam',            color: '#1d9bf0' },
@@ -126,7 +161,7 @@
     const STORE_IDS = Object.keys(STORES).map(Number);
 
     // ── Auth helpers ──────────────────────────────────────────────────────
-    function getUser()  { try { return JSON.parse(localStorage.getItem('ga_user')); } catch { return null; } }
+    function getUser()    { try { return JSON.parse(localStorage.getItem('ga_user')); } catch { return null; } }
     function isLoggedIn() { return !!getUser(); }
 
     function logout() {
@@ -135,12 +170,12 @@
     }
 
     // ── Wishlist helpers ──────────────────────────────────────────────────
-    function getWishlist() { try { return JSON.parse(localStorage.getItem('ga_wishlist')) || []; } catch { return []; } }
-    function saveWishlist(list) { localStorage.setItem('ga_wishlist', JSON.stringify(list)); }
+    function getWishlist()       { try { return JSON.parse(localStorage.getItem('ga_wishlist')) || []; } catch { return []; } }
+    function saveWishlist(list)  { localStorage.setItem('ga_wishlist', JSON.stringify(list)); }
 
     function addToWishlist(game) {
       const list = getWishlist();
-      if (list.find(g => g.gameID === game.gameID)) return; // already added
+      if (list.find(g => g.gameID === game.gameID)) return;
       list.push(game);
       saveWishlist(list);
       renderWishlist();
@@ -161,9 +196,27 @@
       return getWishlist().some(g => g.gameID === gameID);
     }
 
+    // ── Cache banner helpers ──────────────────────────────────────────────
+    function formatAge(ms) {
+      const mins = Math.floor(ms / 60000);
+      if (mins < 1)  return 'just now';
+      if (mins < 60) return `${mins} minute${mins > 1 ? 's' : ''} ago`;
+      return `${Math.floor(mins / 60)} hour(s) ago`;
+    }
+
+    function updateBanner(ageMs, fresh) {
+      const banner = document.getElementById('cacheBanner');
+      const text   = document.getElementById('cacheAgeText');
+      const btn    = document.getElementById('refreshBtn');
+      banner.style.display    = 'flex';
+      text.textContent        = `Deals last updated: ${formatAge(ageMs)}`;
+      btn.style.display       = fresh ? 'none' : 'inline-block';
+      banner.style.borderColor = fresh ? 'var(--green)' : 'var(--red)';
+    }
+
     // ── Render nav based on auth state ────────────────────────────────────
     function renderNav() {
-      const nav = document.getElementById('navActions');
+      const nav  = document.getElementById('navActions');
       const user = getUser();
       if (user) {
         nav.innerHTML = `
@@ -179,11 +232,11 @@
     // ── Render auth prompt or wishlist section ────────────────────────────
     function renderAuthState() {
       if (isLoggedIn()) {
-        document.getElementById('authPrompt').style.display     = 'none';
+        document.getElementById('authPrompt').style.display      = 'none';
         document.getElementById('wishlistSection').style.display = 'block';
         renderWishlist();
       } else {
-        document.getElementById('authPrompt').style.display     = 'flex';
+        document.getElementById('authPrompt').style.display      = 'flex';
         document.getElementById('wishlistSection').style.display = 'none';
       }
     }
@@ -198,13 +251,12 @@
       count.textContent = list.length ? `// ${list.length} game${list.length !== 1 ? 's' : ''}` : '';
 
       if (!list.length) {
-        grid.innerHTML  = '';
+        grid.innerHTML      = '';
         empty.style.display = 'block';
         return;
       }
       empty.style.display = 'none';
 
-      // Show skeletons while loading
       grid.innerHTML = Array(list.length).fill(`
         <div class="store-deal-card skeleton-card">
           <div class="skeleton-header"></div>
@@ -265,7 +317,7 @@
                       ${sv > 0 ? `<span class="deal-badge">−${sv}%</span>` : ''}
                     </div>
                   </a>`;
-                }).join('')}
+              }).join('')}
             </div>
           </div>`;
       });
@@ -321,11 +373,24 @@
         </div>`;
     }
 
-    // ── Load all store deals ──────────────────────────────────────────────
+    // ── Render deals from data object ─────────────────────────────────────
+    function renderDeals(data) {
+      const grid = document.getElementById('dealsGrid');
+      const ts   = document.getElementById('dealsTimestamp');
+      let html   = '';
+      STORE_IDS.forEach(id => {
+        if (data[id] && data[id].length > 0) html += buildDealCard(id, data[id]);
+      });
+      grid.innerHTML  = html || '<p style="color:var(--muted);padding:1rem;">No deals found.</p>';
+      ts.textContent  = `// updated ${new Date().toLocaleTimeString()}`;
+    }
+
+    // ── Load all deals — check cache first ────────────────────────────────
     async function loadAllDeals() {
       const grid = document.getElementById('dealsGrid');
       const ts   = document.getElementById('dealsTimestamp');
 
+      // Show skeletons
       grid.innerHTML = Array(5).fill(`
         <div class="store-deal-card skeleton-card">
           <div class="skeleton-header"></div>
@@ -335,23 +400,78 @@
         </div>`).join('');
       ts.textContent = '// loading...';
 
-      const results = await Promise.allSettled(
-        STORE_IDS.map(id => fetchStoreDeals(id, 3))
-      );
-
-      let html = '';
-      results.forEach((result, i) => {
-        const storeId = STORE_IDS[i];
-        if (result.status === 'fulfilled' && result.value.length > 0 && STORES[storeId]) {
-          html += buildDealCard(storeId, result.value);
+      try {
+        const cacheRes = await fetch(`${BACKEND}/api/cache/deals`);
+        if (cacheRes.ok) {
+          const { data, ageMs, fresh } = await cacheRes.json();
+          updateBanner(ageMs, fresh);
+          if (fresh) {
+            renderDeals(data);
+            return;
+          }
         }
-      });
+      } catch (err) {
+        console.warn('Cache unreachable, fetching live:', err);
+      }
 
-      grid.innerHTML = html || '<p style="color:var(--muted);padding:1rem;">No deals found.</p>';
-      ts.textContent = `// updated ${new Date().toLocaleTimeString()}`;
+      // Cache stale or backend unreachable — fetch live
+      await refreshDeals();
     }
 
-    // ── Search games ──────────────────────────────────────────────────────
+    // ── Force refresh — fetch live + save to cache ────────────────────────
+    async function refreshDeals() {
+      const btn  = document.getElementById('refreshBtn');
+      const grid = document.getElementById('dealsGrid');
+      const ts   = document.getElementById('dealsTimestamp');
+
+      if (btn) { btn.textContent = '↻ Refreshing...'; btn.disabled = true; }
+
+      grid.innerHTML = Array(5).fill(`
+        <div class="store-deal-card skeleton-card">
+          <div class="skeleton-header"></div>
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+        </div>`).join('');
+      ts.textContent = '// refreshing...';
+
+      try {
+        const results = await Promise.allSettled(
+          STORE_IDS.map(id => fetchStoreDeals(id, 3))
+        );
+
+        const freshData = {};
+        results.forEach((result, i) => {
+          const storeId = STORE_IDS[i];
+          if (result.status === 'fulfilled' && result.value.length > 0) {
+            freshData[storeId] = result.value;
+          }
+        });
+
+        // Save to backend cache
+        try {
+          await fetch(`${BACKEND}/api/cache/deals`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data: freshData })
+          });
+        } catch (err) {
+          console.warn('Could not save to cache:', err);
+        }
+
+        renderDeals(freshData);
+        updateBanner(0, true);
+
+      } catch (err) {
+        grid.innerHTML = '<p style="color:var(--red);padding:1rem;">Error loading deals. Try again.</p>';
+        ts.textContent = '// error';
+        console.error(err);
+      } finally {
+        if (btn) { btn.textContent = '↻ Refresh Now'; btn.disabled = false; }
+      }
+    }
+
+    // ── Search games — always live, never cached ──────────────────────────
     async function searchGames() {
       const query = document.getElementById('searchInput').value.trim();
       if (!query) return;
@@ -360,9 +480,9 @@
       const resultsGrid    = document.getElementById('searchResultsGrid');
       const label          = document.getElementById('searchResultsLabel');
 
-      resultsGrid.innerHTML = `<div style="color:var(--muted);padding:1rem;font-size:0.85rem;">Searching...</div>`;
+      resultsGrid.innerHTML        = `<div style="color:var(--muted);padding:1rem;font-size:0.85rem;">Searching...</div>`;
       resultsSection.style.display = 'block';
-      label.textContent = `// "${query}"`;
+      label.textContent            = `// "${query}"`;
       resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
       try {
@@ -391,8 +511,8 @@
           const deals = (game.deals || []).filter(d => STORES[parseInt(d.storeID)]);
           if (!info || !deals.length) return;
 
-          const bestDeal  = deals.sort((a, b) => parseFloat(a.price) - parseFloat(b.price))[0];
-          const storeInfo = STORES[parseInt(bestDeal.storeID)];
+          const bestDeal   = deals.sort((a, b) => parseFloat(a.price) - parseFloat(b.price))[0];
+          const storeInfo  = STORES[parseInt(bestDeal.storeID)];
           const wishlisted = isWishlisted(game.gameID);
 
           html += `

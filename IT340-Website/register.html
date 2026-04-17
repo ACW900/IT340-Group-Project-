@@ -132,7 +132,7 @@
             </span>
           </div>
 
-          <button type="submit" class="submit-btn">Create my account →</button>
+          <button type="submit" class="submit-btn" id="submitBtn">Create my account →</button>
         </form>
       </div>
 
@@ -150,6 +150,16 @@
   </div>
 
   <script>
+    const BACKEND = 'http://BACKEND_MACHINE_IP:3000';
+
+    // ── SHA-256 helper ─────────────────────────────────────────────────
+    async function sha256(message) {
+      const msgBuffer  = new TextEncoder().encode(message);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray  = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
     function checkUsername(el) {
       const v = el.value.trim();
       const status = document.getElementById('usernameStatus');
@@ -160,6 +170,7 @@
       status.style.color = ok ? 'var(--green)' : 'var(--red)';
       updateProgress();
     }
+
     function checkEmail(el) {
       const v = el.value.trim();
       const status = document.getElementById('emailStatus');
@@ -170,6 +181,7 @@
       status.style.color = ok ? 'var(--green)' : 'var(--red)';
       updateProgress();
     }
+
     function checkPasswordStrength(el) {
       const v = el.value;
       let score = 0;
@@ -183,6 +195,7 @@
       document.getElementById('pwLabel').textContent = v ? (['','Weak','Fair','Good','Strong'][score] || 'Weak') : 'Enter a password';
       updateProgress();
     }
+
     function checkConfirm(el) {
       const pw = document.getElementById('password').value;
       const status = document.getElementById('confirmStatus');
@@ -192,6 +205,7 @@
       status.textContent = ok ? '✓' : '✗';
       status.style.color = ok ? 'var(--green)' : 'var(--red)';
     }
+
     function updateProgress() {
       const un = document.getElementById('username').className === 'valid';
       const em = document.getElementById('email').className === 'valid';
@@ -200,8 +214,20 @@
       document.getElementById('step2').className = 'progress-step' + (em ? ' done' : (un ? ' active' : ''));
       document.getElementById('step3').className = 'progress-step' + (pw ? ' done' : (em ? ' active' : ''));
     }
-    function handleRegister(e) {
+
+    function showError(msg) {
+      const err = document.getElementById('errorMsg');
+      document.getElementById('errorText').textContent = msg;
+      err.classList.add('visible');
+    }
+
+    function hideError() {
+      document.getElementById('errorMsg').classList.remove('visible');
+    }
+
+    async function handleRegister(e) {
       e.preventDefault();
+
       const fname    = document.getElementById('fname').value.trim();
       const lname    = document.getElementById('lname').value.trim();
       const username = document.getElementById('username').value.trim();
@@ -209,32 +235,59 @@
       const pw       = document.getElementById('password').value;
       const confirm  = document.getElementById('confirm').value;
       const terms    = document.getElementById('terms').checked;
-      const err      = document.getElementById('errorMsg');
+      const btn      = document.getElementById('submitBtn');
+
       if (!fname || !lname || !username || !email || !pw || !confirm) {
-        err.classList.add('visible');
-        document.getElementById('errorText').textContent = 'Please fill in all fields.';
-        return;
+        showError('Please fill in all fields.'); return;
       }
       if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-        err.classList.add('visible');
-        document.getElementById('errorText').textContent = 'Username must be 3–20 chars: letters, numbers, underscores.';
-        return;
+        showError('Username must be 3–20 chars: letters, numbers, underscores.'); return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showError('Please enter a valid email address.'); return;
+      }
+      if (pw.length < 8) {
+        showError('Password must be at least 8 characters.'); return;
       }
       if (pw !== confirm) {
-        err.classList.add('visible');
-        document.getElementById('errorText').textContent = 'Passwords do not match.';
-        return;
+        showError('Passwords do not match.'); return;
       }
       if (!terms) {
-        err.classList.add('visible');
-        document.getElementById('errorText').textContent = 'Please accept the Terms of Service.';
-        return;
+        showError('Please accept the Terms of Service.'); return;
       }
-      err.classList.remove('visible');
-      // Store session in localStorage
-      localStorage.setItem('ga_user', JSON.stringify({ email, name: username }));
-      document.getElementById('formView').style.display = 'none';
-      document.getElementById('successView').classList.add('visible');
+
+      hideError();
+      btn.textContent = 'Creating account...';
+      btn.disabled    = true;
+
+      try {
+        // ── Hash password in frontend before sending ──────────────────
+        const hashedPassword = await sha256(pw);
+
+        const res = await fetch(`${BACKEND}/api/register`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ fname, lname, username, email, password: hashedPassword })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.message || 'Registration failed. Please try again.');
+          return;
+        }
+
+        localStorage.setItem('ga_user', JSON.stringify({ email, name: username }));
+        document.getElementById('formView').style.display = 'none';
+        document.getElementById('successView').classList.add('visible');
+
+      } catch (err) {
+        showError('Could not reach the server. Please try again later.');
+        console.error(err);
+      } finally {
+        btn.textContent = 'Create my account →';
+        btn.disabled    = false;
+      }
     }
   </script>
 </body>

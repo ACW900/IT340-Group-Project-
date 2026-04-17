@@ -42,7 +42,7 @@
         <span id="errorText">Invalid email or password.</span>
       </div>
 
-      <form id="loginForm" onsubmit="handleLogin(event)">
+      <form id="loginForm" onsubmit="handleLogin(event)" novalidate>
 
         <div class="form-group">
           <label for="email">Email address</label>
@@ -73,31 +73,92 @@
           <a href="#" class="forgot-link">Forgot password?</a>
         </div>
 
-        <button type="submit" class="submit-btn">Log in to GameAtlas</button>
+        <button type="submit" class="submit-btn" id="submitBtn">Log in to GameAtlas</button>
       </form>
 
     </div>
   </div>
 
   <script>
+    const BACKEND = 'http://BACKEND_MACHINE_IP:3000';
+
+    // ── SHA-256 helper ─────────────────────────────────────────────────
+    async function sha256(message) {
+      const msgBuffer  = new TextEncoder().encode(message);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray  = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
     function togglePw() {
       const pw = document.getElementById('password');
       pw.type = pw.type === 'password' ? 'text' : 'password';
     }
-    function handleLogin(e) {
+
+    function showError(msg) {
+      const err = document.getElementById('errorMsg');
+      document.getElementById('errorText').textContent = msg;
+      err.classList.add('visible');
+    }
+
+    function hideError() {
+      document.getElementById('errorMsg').classList.remove('visible');
+    }
+
+    async function handleLogin(e) {
       e.preventDefault();
-      const email = document.getElementById('email').value.trim();
-      const pw    = document.getElementById('password').value;
-      const err   = document.getElementById('errorMsg');
+
+      const email    = document.getElementById('email').value.trim();
+      const pw       = document.getElementById('password').value;
+      const remember = document.getElementById('remember').checked;
+      const btn      = document.getElementById('submitBtn');
+
       if (!email || !pw) {
-        err.classList.add('visible');
-        document.getElementById('errorText').textContent = 'Please fill in all fields.';
-        return;
+        showError('Please fill in all fields.'); return;
       }
-      err.classList.remove('visible');
-      // Store session in localStorage
-      localStorage.setItem('ga_user', JSON.stringify({ email, name: email.split('@')[0] }));
-      window.location.href = 'index.html';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showError('Please enter a valid email address.'); return;
+      }
+
+      hideError();
+      btn.textContent = 'Logging in...';
+      btn.disabled    = true;
+
+      try {
+        // ── Hash password in frontend before sending ──────────────────
+        const hashedPassword = await sha256(pw);
+
+        const res = await fetch(`${BACKEND}/api/login`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ email, password: hashedPassword })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.message || 'Invalid email or password.');
+          return;
+        }
+
+        const user = { email: data.user.email, name: data.user.name };
+
+        if (remember) {
+          localStorage.setItem('ga_user', JSON.stringify(user));
+        } else {
+          sessionStorage.setItem('ga_user', JSON.stringify(user));
+          localStorage.removeItem('ga_user');
+        }
+
+        window.location.href = 'index.html';
+
+      } catch (err) {
+        showError('Could not reach the server. Please try again later.');
+        console.error(err);
+      } finally {
+        btn.textContent = 'Log in to GameAtlas';
+        btn.disabled    = false;
+      }
     }
   </script>
 </body>
