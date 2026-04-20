@@ -6,11 +6,11 @@ const validator     = require('validator');
 
 const app = express();
 
-app.use(cors({ origin: 'http://FRONTEND_MACHINE_IP' }));
+app.use(cors({ origin: 'http://192.168.199.131' }));
 app.use(express.json());
 app.use(mongoSanitize());
 
-mongoose.connect('mongodb://MONGO_MACHINE_IP:27017/gameatlas')
+mongoose.connect('mongodb://192.168.201.133:27017/gameatlas')
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error(err));
 
@@ -20,7 +20,7 @@ const userSchema = new mongoose.Schema({
   lname:    { type: String, required: true },
   username: { type: String, required: true, unique: true },
   email:    { type: String, required: true, unique: true },
-  password: { type: String, required: true }  // stores SHA-256 hash from frontend
+  password: { type: String, required: true }
 });
 const User = mongoose.model('User', userSchema);
 
@@ -38,7 +38,6 @@ app.post('/api/register', async (req, res) => {
   try {
     let { fname, lname, username, email, password } = req.body;
 
-    // ── Input Sanitization ─────────────────────────────────────────────
     fname    = validator.escape(fname.trim());
     lname    = validator.escape(lname.trim());
     username = validator.escape(username.trim());
@@ -55,7 +54,6 @@ app.post('/api/register', async (req, res) => {
     if (existing)
       return res.status(409).json({ message: 'Email or username already in use.' });
 
-    // password arrives already SHA-256 hashed from frontend — store as-is
     const user = new User({ fname, lname, username, email, password });
     await user.save();
 
@@ -82,7 +80,6 @@ app.post('/api/login', async (req, res) => {
     if (!user)
       return res.status(401).json({ message: 'Invalid email or password.' });
 
-    // compare SHA-256 hashes directly
     if (password !== user.password)
       return res.status(401).json({ message: 'Invalid email or password.' });
 
