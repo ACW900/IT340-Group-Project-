@@ -1,20 +1,48 @@
-const express       = require('express');
-const mongoose      = require('mongoose');
-const cors          = require('cors');
-const mongoSanitize = require('express-mongo-sanitize');
-const validator     = require('validator');
+const express    = require('express');
+const mongoose   = require('mongoose');
+const cors       = require('cors');
+const validator  = require('validator');
 
 const app = express();
 
 app.use(cors({ origin: 'http://192.168.199.131' }));
 app.use(express.json());
-app.use(mongoSanitize());
 
-mongoose.connect('mongodb://192.168.201.133:27017/gameatlas')
+
+app.use(express.json());
+
+
+// ── Request Logger ─────────────────────────────────────────────────────
+app.use((req, res, next) => {
+  const time = new Date().toLocaleTimeString();
+  console.log(`[${time}] ${req.method} ${req.path}`);
+  next();
+});
+
+
+// ── Manual NoSQL injection sanitization ───────────────────────────────
+app.use((req, res, next) => {
+  if (req.body) {
+    const sanitize = (obj, skipKeys = []) => {
+      Object.keys(obj).forEach(key => {
+        if (skipKeys.includes(key)) return;
+        if (typeof obj[key] === 'string') {
+          obj[key] = obj[key].replace(/\$/g, '');
+        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+          sanitize(obj[key], skipKeys);
+        }
+      });
+    };
+    sanitize(req.body, ['email']);
+  }
+  next();
+});             
+
+
+mongoose.connect('mongodb://192.168.199.133:27017/gameatlas')
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error(err));
 
-// ── Schemas ────────────────────────────────────────────────────────────
 const userSchema = new mongoose.Schema({
   fname:    { type: String, required: true },
   lname:    { type: String, required: true },
@@ -33,7 +61,6 @@ const Cache = mongoose.model('Cache', cacheSchema);
 
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
-// ── Register ───────────────────────────────────────────────────────────
 app.post('/api/register', async (req, res) => {
   try {
     let { fname, lname, username, email, password } = req.body;
@@ -47,7 +74,7 @@ app.post('/api/register', async (req, res) => {
       return res.status(400).json({ message: 'Invalid email address.' });
     if (!/^[a-zA-Z0-9_]{3,20}$/.test(username))
       return res.status(400).json({ message: 'Invalid username.' });
-    if (!password || password.length !== 64)
+    if (!password || password.length === 0)
       return res.status(400).json({ message: 'Invalid password format.' });
 
     const existing = await User.findOne({ $or: [{ email }, { username }] });
@@ -64,16 +91,15 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-// ── Login ──────────────────────────────────────────────────────────────
 app.post('/api/login', async (req, res) => {
   try {
     let { email, password } = req.body;
 
-    email = validator.normalizeEmail(email.trim());
+    email = email.trim();
 
     if (!validator.isEmail(email))
       return res.status(400).json({ message: 'Invalid email address.' });
-    if (!password || password.length !== 64)
+    if (!password || password.length === 0)
       return res.status(400).json({ message: 'Invalid password format.' });
 
     const user = await User.findOne({ email });
@@ -93,7 +119,6 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// ── Cache GET ──────────────────────────────────────────────────────────
 app.get('/api/cache/:key', async (req, res) => {
   try {
     const entry = await Cache.findOne({ key: req.params.key });
@@ -109,7 +134,6 @@ app.get('/api/cache/:key', async (req, res) => {
   }
 });
 
-// ── Cache POST ─────────────────────────────────────────────────────────
 app.post('/api/cache/:key', async (req, res) => {
   try {
     const { data } = req.body;
@@ -125,3 +149,6 @@ app.post('/api/cache/:key', async (req, res) => {
 });
 
 app.listen(3000, () => console.log('Server running on port 3000'));
+
+//
+
