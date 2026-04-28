@@ -80,13 +80,17 @@
   </div>
 
   <script>
-    const BACKEND = 'http://192.168.199.132:3000';
+    const BACKEND = 'http://192.168.199.131';
 
-    async function sha256(message) {
-      const msgBuffer  = new TextEncoder().encode(message);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-      const hashArray  = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    function sha256(message) {
+      let hash = 0;
+      const str = message + 'gameatlas_salt';
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+      }
+      return Math.abs(hash).toString(16).padStart(64, '0');
     }
 
     function togglePw() {
@@ -104,7 +108,7 @@
       document.getElementById('errorMsg').classList.remove('visible');
     }
 
-    async function handleLogin(e) {
+    function handleLogin(e) {
       e.preventDefault();
 
       const email    = document.getElementById('email').value.trim();
@@ -123,41 +127,35 @@
       btn.textContent = 'Logging in...';
       btn.disabled    = true;
 
-      try {
-        const hashedPassword = await sha256(pw);
+      const hashedPassword = sha256(pw);
 
-        const res = await fetch(`${BACKEND}/api/login`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ email, password: hashedPassword })
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
+      fetch(`${BACKEND}/api/login`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email, password: hashedPassword })
+      })
+      .then(res => res.json().then(data => ({ ok: res.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) {
           showError(data.message || 'Invalid email or password.');
           return;
         }
-
         const user = { email: data.user.email, name: data.user.name };
-
-        if (remember) {
-          localStorage.setItem('ga_user', JSON.stringify(user));
-        } else {
-          sessionStorage.setItem('ga_user', JSON.stringify(user));
-          localStorage.removeItem('ga_user');
-        }
-
+        localStorage.setItem('ga_user',JSON.stringify(user));
+        
         window.location.href = 'index.html';
-
-      } catch (err) {
+      })
+      .catch(err => {
         showError('Could not reach the server. Please try again later.');
         console.error(err);
-      } finally {
+      })
+      .finally(() => {
         btn.textContent = 'Log in to GameAtlas';
         btn.disabled    = false;
-      }
+      });
     }
   </script>
 </body>
 </html>
+
+

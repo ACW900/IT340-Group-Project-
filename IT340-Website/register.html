@@ -150,14 +150,21 @@
   </div>
 
   <script>
-    const BACKEND = 'http://192.168.199.132:3000';
+    const BACKEND = 'http://192.168.199.131';
 
-    async function sha256(message) {
-      const msgBuffer  = new TextEncoder().encode(message);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-      const hashArray  = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    // ── SHA-256 helper ─────────────────────────────────────────────────
+    function sha256(message) {
+      let hash = 0;
+      const str = message + 'gameatlas_salt';
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+      }
+      // Use a simple hex string of fixed length 64
+      return Math.abs(hash).toString(16).padStart(64, '0');
     }
+
 
     function checkUsername(el) {
       const v = el.value.trim();
@@ -224,7 +231,7 @@
       document.getElementById('errorMsg').classList.remove('visible');
     }
 
-    async function handleRegister(e) {
+    function handleRegister(e) {
       e.preventDefault();
 
       const fname    = document.getElementById('fname').value.trim();
@@ -258,35 +265,35 @@
       hideError();
       btn.textContent = 'Creating account...';
       btn.disabled    = true;
-
-      try {
-        const hashedPassword = await sha256(pw);
-
-        const res = await fetch(`${BACKEND}/api/register`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ fname, lname, username, email, password: hashedPassword })
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
+    const hashedPassword = sha256(pw);
+fetch(`${BACKEND}/api/register`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ fname, lname, username, email, password: hashedPassword })
+      })
+      .then(res => res.json().then(data => ({ ok: res.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) {
           showError(data.message || 'Registration failed. Please try again.');
           return;
         }
-
         localStorage.setItem('ga_user', JSON.stringify({ email, name: username }));
         document.getElementById('formView').style.display = 'none';
         document.getElementById('successView').classList.add('visible');
-
-      } catch (err) {
+      })
+      .catch(err => {
         showError('Could not reach the server. Please try again later.');
         console.error(err);
-      } finally {
+      })
+      .finally(() => {
         btn.textContent = 'Create my account →';
         btn.disabled    = false;
-      }
-    }
+      });
+
+    
+         }
   </script>
 </body>
 </html>
+
+

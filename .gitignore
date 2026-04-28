@@ -1,3 +1,4 @@
 #
 *.vmdk
 *.js
+*lck
