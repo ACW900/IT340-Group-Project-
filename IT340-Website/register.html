@@ -152,19 +152,13 @@
   <script>
     const BACKEND = 'http://192.168.199.131';
 
-    // ── SHA-256 helper ─────────────────────────────────────────────────
-    function sha256(message) {
-      let hash = 0;
-      const str = message + 'gameatlas_salt';
-      for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash;
-      }
-      // Use a simple hex string of fixed length 64
-      return Math.abs(hash).toString(16).padStart(64, '0');
+    // ── Real SHA-256 using Web Crypto API ──────────────────────────────
+    async function sha256(message) {
+      const msgBuffer  = new TextEncoder().encode(message + 'gameatlas_salt');
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray  = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     }
-
 
     function checkUsername(el) {
       const v = el.value.trim();
@@ -231,7 +225,7 @@
       document.getElementById('errorMsg').classList.remove('visible');
     }
 
-    function handleRegister(e) {
+    async function handleRegister(e) {
       e.preventDefault();
 
       const fname    = document.getElementById('fname').value.trim();
@@ -265,8 +259,10 @@
       hideError();
       btn.textContent = 'Creating account...';
       btn.disabled    = true;
-    const hashedPassword = sha256(pw);
-fetch(`${BACKEND}/api/register`, {
+
+      const hashedPassword = await sha256(pw);
+
+      fetch(`${BACKEND}/api/register`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ fname, lname, username, email, password: hashedPassword })
@@ -289,9 +285,7 @@ fetch(`${BACKEND}/api/register`, {
         btn.textContent = 'Create my account →';
         btn.disabled    = false;
       });
-
-    
-         }
+    }
   </script>
 </body>
 </html>

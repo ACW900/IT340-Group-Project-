@@ -82,15 +82,12 @@
   <script>
     const BACKEND = 'http://192.168.199.131';
 
-    function sha256(message) {
-      let hash = 0;
-      const str = message + 'gameatlas_salt';
-      for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash;
-      }
-      return Math.abs(hash).toString(16).padStart(64, '0');
+    // ── Real SHA-256 using Web Crypto API ──────────────────────────────
+    async function sha256(message) {
+      const msgBuffer  = new TextEncoder().encode(message + 'gameatlas_salt');
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray  = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
     function togglePw() {
@@ -108,12 +105,11 @@
       document.getElementById('errorMsg').classList.remove('visible');
     }
 
-    function handleLogin(e) {
+    async function handleLogin(e) {
       e.preventDefault();
 
       const email    = document.getElementById('email').value.trim();
       const pw       = document.getElementById('password').value;
-      const remember = document.getElementById('remember').checked;
       const btn      = document.getElementById('submitBtn');
 
       if (!email || !pw) {
@@ -127,7 +123,7 @@
       btn.textContent = 'Logging in...';
       btn.disabled    = true;
 
-      const hashedPassword = sha256(pw);
+      const hashedPassword = await sha256(pw);
 
       fetch(`${BACKEND}/api/login`, {
         method:  'POST',
@@ -140,9 +136,8 @@
           showError(data.message || 'Invalid email or password.');
           return;
         }
-        const user = { email: data.user.email, name: data.user.name };
-        localStorage.setItem('ga_user',JSON.stringify(user));
-        
+        const user = { id: data.user.id, email: data.user.email, name: data.user.name };
+        localStorage.setItem('ga_user', JSON.stringify(user));
         window.location.href = 'index.html';
       })
       .catch(err => {

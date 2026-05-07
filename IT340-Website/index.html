@@ -41,9 +41,7 @@
   <!-- NAV -->
   <nav>
     <a href="index.html" class="logo">Game<span>Atlas</span></a>
-    <div class="nav-actions" id="navActions">
-      <!-- Populated by JS based on auth state -->
-    </div>
+    <div class="nav-actions" id="navActions"></div>
   </nav>
 
   <!-- CACHE BANNER -->
@@ -95,7 +93,7 @@
         <button onclick="clearWishlist()" class="see-all" style="background:none;border:none;cursor:pointer;color:var(--red);">Clear all</button>
       </div>
       <div id="wishlistEmpty" style="display:none;padding:1.5rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:0.88rem;margin-bottom:2rem;">
-        Your wishlist is empty. Search for games below and click <strong>+ Wishlist</strong> to start tracking prices.
+        Your wishlist is empty. Search for games below and click <strong>★ Wishlist</strong> to start tracking prices.
       </div>
       <div class="deals-grid" id="wishlistGrid"></div>
     </div>
@@ -146,11 +144,9 @@
   </footer>
 
   <script>
-    // ── Config ────────────────────────────────────────────────────────────
     const BACKEND      = 'http://192.168.199.131';
-    const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+    const CACHE_TTL_MS = 60 * 60 * 1000;
 
-    // ── CheapShark store ID map ───────────────────────────────────────────
     const STORES = {
       1:  { name: 'Steam',            color: '#1d9bf0' },
       25: { name: 'Epic Games',       color: '#313131' },
@@ -160,43 +156,75 @@
     };
     const STORE_IDS = Object.keys(STORES).map(Number);
 
-    // ── Auth helpers ──────────────────────────────────────────────────────
+    // ── Auth helpers ──────────────────────────────────────────────────
     function getUser()    { try { return JSON.parse(localStorage.getItem('ga_user')); } catch { return null; } }
     function isLoggedIn() { return !!getUser(); }
+    function logout() { localStorage.removeItem('ga_user'); location.reload(); }
 
-    function logout() {
-      localStorage.removeItem('ga_user');
-      location.reload();
-    }
+    // ── Wishlist helpers (DB backed) ──────────────────────────────────
+    let _wishlist = [];
 
-    // ── Wishlist helpers ──────────────────────────────────────────────────
-    function getWishlist()       { try { return JSON.parse(localStorage.getItem('ga_wishlist')) || []; } catch { return []; } }
-    function saveWishlist(list)  { localStorage.setItem('ga_wishlist', JSON.stringify(list)); }
-
-    function addToWishlist(game) {
-      const list = getWishlist();
-      if (list.find(g => g.gameID === game.gameID)) return;
-      list.push(game);
-      saveWishlist(list);
-      renderWishlist();
-    }
-
-    function removeFromWishlist(gameID) {
-      saveWishlist(getWishlist().filter(g => g.gameID !== gameID));
-      renderWishlist();
-    }
-
-    function clearWishlist() {
-      if (!confirm('Remove all games from your wishlist?')) return;
-      saveWishlist([]);
-      renderWishlist();
+    async function loadWishlist() {
+      const user = getUser();
+      if (!user || !user.id) return;
+      try {
+        const res  = await fetch(`${BACKEND}/api/wishlist/${user.id}`);
+        const data = await res.json();
+        _wishlist  = data.games || [];
+      } catch (err) {
+        console.warn('Could not load wishlist:', err);
+        _wishlist = [];
+      }
     }
 
     function isWishlisted(gameID) {
-      return getWishlist().some(g => g.gameID === gameID);
+      return _wishlist.some(g => g.gameID === gameID);
     }
 
-    // ── Cache banner helpers ──────────────────────────────────────────────
+    async function addToWishlist(gameID, title, thumb) {
+      const user = getUser();
+      if (!user || !user.id) return;
+      try {
+        const res  = await fetch(`${BACKEND}/api/wishlist/${user.id}/add`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ gameID, title, thumb })
+        });
+        const data = await res.json();
+        _wishlist  = data.games || _wishlist;
+        renderWishlist();
+      } catch (err) {
+        console.error('Could not add to wishlist:', err);
+      }
+    }
+
+    async function removeFromWishlist(gameID) {
+      const user = getUser();
+      if (!user || !user.id) return;
+      try {
+        const res  = await fetch(`${BACKEND}/api/wishlist/${user.id}/remove/${gameID}`, { method: 'DELETE' });
+        const data = await res.json();
+        _wishlist  = data.games || _wishlist;
+        renderWishlist();
+      } catch (err) {
+        console.error('Could not remove from wishlist:', err);
+      }
+    }
+
+    async function clearWishlist() {
+      if (!confirm('Remove all games from your wishlist?')) return;
+      const user = getUser();
+      if (!user || !user.id) return;
+      try {
+        await fetch(`${BACKEND}/api/wishlist/${user.id}/clear`, { method: 'DELETE' });
+        _wishlist = [];
+        renderWishlist();
+      } catch (err) {
+        console.error('Could not clear wishlist:', err);
+      }
+    }
+
+    // ── Cache banner ──────────────────────────────────────────────────
     function formatAge(ms) {
       const mins = Math.floor(ms / 60000);
       if (mins < 1)  return 'just now';
@@ -208,13 +236,13 @@
       const banner = document.getElementById('cacheBanner');
       const text   = document.getElementById('cacheAgeText');
       const btn    = document.getElementById('refreshBtn');
-      banner.style.display    = 'flex';
-      text.textContent        = `Deals last updated: ${formatAge(ageMs)}`;
-      btn.style.display       = fresh ? 'none' : 'inline-block';
+      banner.style.display     = 'flex';
+      text.textContent         = `Deals last updated: ${formatAge(ageMs)}`;
+      btn.style.display        = fresh ? 'none' : 'inline-block';
       banner.style.borderColor = fresh ? 'var(--green)' : 'var(--red)';
     }
 
-    // ── Render nav based on auth state ────────────────────────────────────
+    // ── Nav ───────────────────────────────────────────────────────────
     function renderNav() {
       const nav  = document.getElementById('navActions');
       const user = getUser();
@@ -229,7 +257,6 @@
       }
     }
 
-    // ── Render auth prompt or wishlist section ────────────────────────────
     function renderAuthState() {
       if (isLoggedIn()) {
         document.getElementById('authPrompt').style.display      = 'none';
@@ -241,23 +268,22 @@
       }
     }
 
-    // ── Render wishlist grid ──────────────────────────────────────────────
+    // ── Render wishlist grid ──────────────────────────────────────────
     async function renderWishlist() {
-      const list  = getWishlist();
       const grid  = document.getElementById('wishlistGrid');
       const empty = document.getElementById('wishlistEmpty');
       const count = document.getElementById('wishlistCount');
 
-      count.textContent = list.length ? `// ${list.length} game${list.length !== 1 ? 's' : ''}` : '';
+      count.textContent = _wishlist.length ? `// ${_wishlist.length} game${_wishlist.length !== 1 ? 's' : ''}` : '';
 
-      if (!list.length) {
+      if (!_wishlist.length) {
         grid.innerHTML      = '';
         empty.style.display = 'block';
         return;
       }
       empty.style.display = 'none';
 
-      grid.innerHTML = Array(list.length).fill(`
+      grid.innerHTML = Array(_wishlist.length).fill(`
         <div class="store-deal-card skeleton-card">
           <div class="skeleton-header"></div>
           <div class="skeleton-row"></div>
@@ -265,7 +291,7 @@
         </div>`).join('');
 
       const detailed = await Promise.allSettled(
-        list.map(g =>
+        _wishlist.map(g =>
           fetch(`https://www.cheapshark.com/api/1.0/games?id=${g.gameID}`)
             .then(r => r.json())
             .then(data => ({ ...data, gameID: g.gameID }))
@@ -282,8 +308,6 @@
 
         const bestDeal  = deals.sort((a, b) => parseFloat(a.price) - parseFloat(b.price))[0];
         const storeInfo = STORES[parseInt(bestDeal.storeID)];
-        const salePrice = bestDeal ? (parseFloat(bestDeal.price) === 0 ? 'FREE' : `$${parseFloat(bestDeal.price).toFixed(2)}`) : 'N/A';
-        const savings   = bestDeal ? Math.round((1 - parseFloat(bestDeal.price) / parseFloat(bestDeal.retailPrice)) * 100) : 0;
 
         html += `
           <div class="store-deal-card">
@@ -325,15 +349,13 @@
       grid.innerHTML = html || '';
     }
 
-    // ── Fetch deals for a single store ────────────────────────────────────
+    // ── Fetch store deals ─────────────────────────────────────────────
     async function fetchStoreDeals(storeId, pageSize = 3) {
-      const url = `https://www.cheapshark.com/api/1.0/deals?storeID=${storeId}&pageSize=${pageSize}&sortBy=DealRating&onSale=1`;
-      const res = await fetch(url);
+      const res = await fetch(`https://www.cheapshark.com/api/1.0/deals?storeID=${storeId}&pageSize=${pageSize}&sortBy=DealRating&onSale=1`);
       if (!res.ok) throw new Error(`Store ${storeId} fetch failed`);
       return res.json();
     }
 
-    // ── Build a deal card ─────────────────────────────────────────────────
     function buildDealCard(storeId, deals) {
       const store = STORES[storeId];
       if (!store) return '';
@@ -346,10 +368,8 @@
         const thumb       = d.thumb
           ? `<img src="${d.thumb}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:5px;" onerror="this.style.display='none'">`
           : `<div style="width:36px;height:36px;border-radius:5px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:1rem;">🎮</div>`;
-        const dealLink = `https://www.cheapshark.com/redirect?dealID=${d.dealID}`;
-
         return `
-          <a class="store-deal-row" href="${dealLink}" target="_blank" rel="noopener" title="${d.title}">
+          <a class="store-deal-row" href="https://www.cheapshark.com/redirect?dealID=${d.dealID}" target="_blank" rel="noopener" title="${d.title}">
             <div class="store-deal-thumb">${thumb}</div>
             <div class="store-deal-info">
               <div class="store-deal-title">${escHtml(d.title)}</div>
@@ -373,7 +393,6 @@
         </div>`;
     }
 
-    // ── Render deals from data object ─────────────────────────────────────
     function renderDeals(data) {
       const grid = document.getElementById('dealsGrid');
       const ts   = document.getElementById('dealsTimestamp');
@@ -381,16 +400,14 @@
       STORE_IDS.forEach(id => {
         if (data[id] && data[id].length > 0) html += buildDealCard(id, data[id]);
       });
-      grid.innerHTML  = html || '<p style="color:var(--muted);padding:1rem;">No deals found.</p>';
-      ts.textContent  = `// updated ${new Date().toLocaleTimeString()}`;
+      grid.innerHTML = html || '<p style="color:var(--muted);padding:1rem;">No deals found.</p>';
+      ts.textContent = `// updated ${new Date().toLocaleTimeString()}`;
     }
 
-    // ── Load all deals — check cache first ────────────────────────────────
     async function loadAllDeals() {
       const grid = document.getElementById('dealsGrid');
       const ts   = document.getElementById('dealsTimestamp');
 
-      // Show skeletons
       grid.innerHTML = Array(5).fill(`
         <div class="store-deal-card skeleton-card">
           <div class="skeleton-header"></div>
@@ -405,20 +422,15 @@
         if (cacheRes.ok) {
           const { data, ageMs, fresh } = await cacheRes.json();
           updateBanner(ageMs, fresh);
-          if (fresh) {
-            renderDeals(data);
-            return;
-          }
+          if (fresh) { renderDeals(data); return; }
         }
       } catch (err) {
         console.warn('Cache unreachable, fetching live:', err);
       }
 
-      // Cache stale or backend unreachable — fetch live
       await refreshDeals();
     }
 
-    // ── Force refresh — fetch live + save to cache ────────────────────────
     async function refreshDeals() {
       const btn  = document.getElementById('refreshBtn');
       const grid = document.getElementById('dealsGrid');
@@ -436,24 +448,19 @@
       ts.textContent = '// refreshing...';
 
       try {
-        const results = await Promise.allSettled(
-          STORE_IDS.map(id => fetchStoreDeals(id, 3))
-        );
-
+        const results   = await Promise.allSettled(STORE_IDS.map(id => fetchStoreDeals(id, 3)));
         const freshData = {};
         results.forEach((result, i) => {
           const storeId = STORE_IDS[i];
-          if (result.status === 'fulfilled' && result.value.length > 0) {
+          if (result.status === 'fulfilled' && result.value.length > 0)
             freshData[storeId] = result.value;
-          }
         });
 
-        // Save to backend cache
         try {
           await fetch(`${BACKEND}/api/cache/deals`, {
-            method: 'POST',
+            method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data: freshData })
+            body:    JSON.stringify({ data: freshData })
           });
         } catch (err) {
           console.warn('Could not save to cache:', err);
@@ -461,7 +468,6 @@
 
         renderDeals(freshData);
         updateBanner(0, true);
-
       } catch (err) {
         grid.innerHTML = '<p style="color:var(--red);padding:1rem;">Error loading deals. Try again.</p>';
         ts.textContent = '// error';
@@ -471,7 +477,7 @@
       }
     }
 
-    // ── Search games — always live, never cached ──────────────────────────
+    // ── Search ────────────────────────────────────────────────────────
     async function searchGames() {
       const query = document.getElementById('searchInput').value.trim();
       if (!query) return;
@@ -567,29 +573,22 @@
       }
     }
 
-    // ── Toggle wishlist from search results ───────────────────────────────
-    function toggleWishlist(gameID, title, thumb) {
+    async function toggleWishlist(gameID, title, thumb) {
       const btn = document.getElementById(`wl-btn-${gameID}`);
       if (isWishlisted(gameID)) {
-        removeFromWishlist(gameID);
-        btn.textContent = '☆';
-        btn.classList.remove('wishlisted');
-        btn.title = 'Add to wishlist';
+        await removeFromWishlist(gameID);
+        if (btn) { btn.textContent = '☆'; btn.classList.remove('wishlisted'); btn.title = 'Add to wishlist'; }
       } else {
-        addToWishlist({ gameID, title, thumb });
-        btn.textContent = '★';
-        btn.classList.add('wishlisted');
-        btn.title = 'Remove from wishlist';
+        await addToWishlist(gameID, title, thumb);
+        if (btn) { btn.textContent = '★'; btn.classList.add('wishlisted'); btn.title = 'Remove from wishlist'; }
       }
     }
 
-    // ── Clear search ──────────────────────────────────────────────────────
     function clearSearch() {
       document.getElementById('searchResults').style.display = 'none';
       document.getElementById('searchInput').value = '';
     }
 
-    // ── Escape HTML helper ────────────────────────────────────────────────
     function escHtml(str) {
       return String(str)
         .replace(/&/g, '&amp;')
@@ -598,9 +597,10 @@
         .replace(/"/g, '&quot;');
     }
 
-    // ── Init ──────────────────────────────────────────────────────────────
-    document.addEventListener('DOMContentLoaded', () => {
+    // ── Init ──────────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', async () => {
       renderNav();
+      if (isLoggedIn()) await loadWishlist();
       renderAuthState();
       loadAllDeals();
       document.getElementById('searchInput').addEventListener('keydown', e => {
