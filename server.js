@@ -14,8 +14,10 @@ const logger = winston.createLogger({
     new winston.transports.Syslog({
       host:     '192.168.199.134',
       port:     514,
-      protocol: 'udp4', 
-      app_name: 'gameatlas'
+      protocol: 'udp4',
+      app_name: 'gameatlas',
+      facility: 'local0',
+      type:     'BSD'
     })
   ]
 });
@@ -80,6 +82,8 @@ const CACHE_TTL_MS = 60 * 60 * 1000;
 app.post('/api/register', async (req, res) => {
   try {
     let { fname, lname, username, email, password } = req.body;
+
+    logger.info(`POST /api/register attempt | email:${email} | username:${username}`);
 
     fname    = validator.escape(fname.trim());
     lname    = validator.escape(lname.trim());
@@ -259,5 +263,4 @@ app.post('/api/cache/:key', async (req, res) => {
 });
 
 app.listen(3000, () => logger.info('Server running on port 3000'));
-
 
