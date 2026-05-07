@@ -1,24 +1,27 @@
-const express    = require('express');
-const mongoose   = require('mongoose');
-const cors       = require('cors');
-const validator  = require('validator');
+const express   = require('express');
+const mongoose  = require('mongoose');
+const cors      = require('cors');
+const validator = require('validator');
+const winston   = require('winston');
+require('winston-syslog');
 
 const app = express();
 
-app.use(cors({ origin: 'http://192.168.199.131' }));
-app.use(express.json());
-
-
-app.use(express.json());
-
-
-// ── Request Logger ─────────────────────────────────────────────────────
-app.use((req, res, next) => {
-  const time = new Date().toLocaleTimeString();
-  console.log(`[${time}] ${req.method} ${req.path}`);
-  next();
+// ── Logger ─────────────────────────────────────────────────────────────
+const logger = winston.createLogger({
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.Syslog({
+      host:     '192.168.199.134',
+      port:     514,
+      protocol: 'udp4', 
+      app_name: 'gameatlas'
+    })
+  ]
 });
 
+app.use(cors({ origin: 'http://192.168.199.131' }));
+app.use(express.json());
 
 // ── Manual NoSQL injection sanitization ───────────────────────────────
 app.use((req, res, next) => {
@@ -36,13 +39,13 @@ app.use((req, res, next) => {
     sanitize(req.body, ['email']);
   }
   next();
-});             
-
+});
 
 mongoose.connect('mongodb://192.168.199.133:27017/gameatlas')
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.error(err));
+  .then(() => logger.info('MongoDB connected'))
+  .catch(err => logger.error(err));
 
+// ── Schemas ────────────────────────────────────────────────────────────
 const userSchema = new mongoose.Schema({
   fname:    { type: String, required: true },
   lname:    { type: String, required: true },
@@ -51,6 +54,18 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true }
 });
 const User = mongoose.model('User', userSchema);
+
+const wishlistItemSchema = new mongoose.Schema({
+  gameID: { type: String, required: true },
+  title:  { type: String, required: true },
+  thumb:  { type: String, default: '' }
+});
+
+const wishlistSchema = new mongoose.Schema({
+  userId:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+  games:    { type: [wishlistItemSchema], default: [] }
+});
+const Wishlist = mongoose.model('Wishlist', wishlistSchema);
 
 const cacheSchema = new mongoose.Schema({
   key:      { type: String, required: true, unique: true },
@@ -61,6 +76,7 @@ const Cache = mongoose.model('Cache', cacheSchema);
 
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
+// ── Register ───────────────────────────────────────────────────────────
 app.post('/api/register', async (req, res) => {
   try {
     let { fname, lname, username, email, password } = req.body;
@@ -68,7 +84,7 @@ app.post('/api/register', async (req, res) => {
     fname    = validator.escape(fname.trim());
     lname    = validator.escape(lname.trim());
     username = validator.escape(username.trim());
-    email    = validator.normalizeEmail(email.trim());
+    email    = email.trim();
 
     if (!validator.isEmail(email))
       return res.status(400).json({ message: 'Invalid email address.' });
@@ -84,13 +100,18 @@ app.post('/api/register', async (req, res) => {
     const user = new User({ fname, lname, username, email, password });
     await user.save();
 
+    // Create empty wishlist for new user
+    await Wishlist.create({ userId: user._id, games: [] });
+
+    logger.info(`POST /api/register → 201 | user:${user._id} | username:${user.username} | ip:${req.ip}`);
     res.status(201).json({ message: 'Account created successfully.' });
   } catch (err) {
-    console.error(err);
+    logger.error(`POST /api/register → 500 | error:${err.message}`);
     res.status(500).json({ message: 'Server error.' });
   }
 });
 
+// ── Login ──────────────────────────────────────────────────────────────
 app.post('/api/login', async (req, res) => {
   try {
     let { email, password } = req.body;
@@ -103,37 +124,124 @@ app.post('/api/login', async (req, res) => {
       return res.status(400).json({ message: 'Invalid password format.' });
 
     const user = await User.findOne({ email });
-    if (!user)
+    if (!user) {
+      logger.warn(`POST /api/login → 401 | user:unknown | username:unknown | ip:${req.ip}`);
       return res.status(401).json({ message: 'Invalid email or password.' });
+    }
 
-    if (password !== user.password)
+    if (password !== user.password) {
+      logger.warn(`POST /api/login → 401 | user:${user._id} | username:${user.username} | ip:${req.ip}`);
       return res.status(401).json({ message: 'Invalid email or password.' });
+    }
 
+    logger.info(`POST /api/login → 200 | user:${user._id} | username:${user.username} | ip:${req.ip}`);
     res.json({
       message: 'Login successful.',
-      user: { email: user.email, name: user.username }
+      user: { id: user._id, email: user.email, name: user.username }
     });
   } catch (err) {
-    console.error(err);
+    logger.error(`POST /api/login → 500 | error:${err.message}`);
     res.status(500).json({ message: 'Server error.' });
   }
 });
 
+// ── Wishlist GET ───────────────────────────────────────────────────────
+app.get('/api/wishlist/:userId', async (req, res) => {
+  try {
+    const wishlist = await Wishlist.findOne({ userId: req.params.userId });
+    if (!wishlist)
+      return res.status(404).json({ message: 'Wishlist not found.' });
+    res.json({ games: wishlist.games });
+  } catch (err) {
+    logger.error(`GET /api/wishlist → 500 | error:${err.message}`);
+    res.status(500).json({ message: 'Server error.' });
+  }
+});
+
+// ── Wishlist ADD ───────────────────────────────────────────────────────
+app.post('/api/wishlist/:userId/add', async (req, res) => {
+  try {
+    const { gameID, title, thumb } = req.body;
+
+    if (!gameID || !title)
+      return res.status(400).json({ message: 'gameID and title are required.' });
+
+    const wishlist = await Wishlist.findOne({ userId: req.params.userId });
+    if (!wishlist)
+      return res.status(404).json({ message: 'Wishlist not found.' });
+
+    const already = wishlist.games.find(g => g.gameID === gameID);
+    if (already)
+      return res.status(409).json({ message: 'Game already in wishlist.' });
+
+    wishlist.games.push({ gameID, title, thumb: thumb || '' });
+    await wishlist.save();
+
+    logger.info(`POST /api/wishlist/add → 200 | user:${req.params.userId} | game:${gameID}`);
+    res.json({ message: 'Added to wishlist.', games: wishlist.games });
+  } catch (err) {
+    logger.error(`POST /api/wishlist/add → 500 | error:${err.message}`);
+    res.status(500).json({ message: 'Server error.' });
+  }
+});
+
+// ── Wishlist REMOVE ────────────────────────────────────────────────────
+app.delete('/api/wishlist/:userId/remove/:gameID', async (req, res) => {
+  try {
+    const wishlist = await Wishlist.findOne({ userId: req.params.userId });
+    if (!wishlist)
+      return res.status(404).json({ message: 'Wishlist not found.' });
+
+    wishlist.games = wishlist.games.filter(g => g.gameID !== req.params.gameID);
+    await wishlist.save();
+
+    logger.info(`DELETE /api/wishlist/remove → 200 | user:${req.params.userId} | game:${req.params.gameID}`);
+    res.json({ message: 'Removed from wishlist.', games: wishlist.games });
+  } catch (err) {
+    logger.error(`DELETE /api/wishlist/remove → 500 | error:${err.message}`);
+    res.status(500).json({ message: 'Server error.' });
+  }
+});
+
+// ── Wishlist CLEAR ─────────────────────────────────────────────────────
+app.delete('/api/wishlist/:userId/clear', async (req, res) => {
+  try {
+    const wishlist = await Wishlist.findOne({ userId: req.params.userId });
+    if (!wishlist)
+      return res.status(404).json({ message: 'Wishlist not found.' });
+
+    wishlist.games = [];
+    await wishlist.save();
+
+    logger.info(`DELETE /api/wishlist/clear → 200 | user:${req.params.userId}`);
+    res.json({ message: 'Wishlist cleared.' });
+  } catch (err) {
+    logger.error(`DELETE /api/wishlist/clear → 500 | error:${err.message}`);
+    res.status(500).json({ message: 'Server error.' });
+  }
+});
+
+// ── Cache GET ──────────────────────────────────────────────────────────
 app.get('/api/cache/:key', async (req, res) => {
   try {
     const entry = await Cache.findOne({ key: req.params.key });
-    if (!entry)
+    if (!entry) {
+      logger.info(`GET /api/cache/${req.params.key} → 404 | ip:${req.ip}`);
       return res.status(404).json({ message: 'No cache found.' });
+    }
 
     const ageMs = Date.now() - new Date(entry.cachedAt).getTime();
     const fresh = ageMs < CACHE_TTL_MS;
 
+    logger.info(`GET /api/cache/${req.params.key} → 200 | fresh:${fresh} | ip:${req.ip}`);
     res.json({ data: entry.data, cachedAt: entry.cachedAt, ageMs, fresh });
   } catch (err) {
+    logger.error(`GET /api/cache → 500 | error:${err.message}`);
     res.status(500).json({ message: 'Server error.' });
   }
 });
 
+// ── Cache POST ─────────────────────────────────────────────────────────
 app.post('/api/cache/:key', async (req, res) => {
   try {
     const { data } = req.body;
@@ -142,13 +250,14 @@ app.post('/api/cache/:key', async (req, res) => {
       { data, cachedAt: new Date() },
       { upsert: true, new: true }
     );
+    logger.info(`POST /api/cache/${req.params.key} → 200 | ip:${req.ip}`);
     res.json({ message: 'Cache updated.' });
   } catch (err) {
+    logger.error(`POST /api/cache → 500 | error:${err.message}`);
     res.status(500).json({ message: 'Server error.' });
   }
 });
 
-app.listen(3000, () => console.log('Server running on port 3000'));
+app.listen(3000, () => logger.info('Server running on port 3000'));
 
-//
 
