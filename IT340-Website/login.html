@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Sans:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="login.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
 </head>
 <body class="auth-body">
 
@@ -82,12 +83,9 @@
   <script>
     const BACKEND = 'http://192.168.199.131';
 
-    // ── Real SHA-256 using Web Crypto API ──────────────────────────────
-    async function sha256(message) {
-      const msgBuffer  = new TextEncoder().encode(message + 'gameatlas_salt');
-      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-      const hashArray  = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    // ── SHA-256 using CryptoJS (works on HTTP) ─────────────────────────
+    function sha256(message) {
+      return CryptoJS.SHA256(message + 'gameatlas_salt').toString();
     }
 
     function togglePw() {
@@ -105,12 +103,12 @@
       document.getElementById('errorMsg').classList.remove('visible');
     }
 
-    async function handleLogin(e) {
+    function handleLogin(e) {
       e.preventDefault();
 
-      const email    = document.getElementById('email').value.trim();
-      const pw       = document.getElementById('password').value;
-      const btn      = document.getElementById('submitBtn');
+      const email = document.getElementById('email').value.trim();
+      const pw    = document.getElementById('password').value;
+      const btn   = document.getElementById('submitBtn');
 
       if (!email || !pw) {
         showError('Please fill in all fields.'); return;
@@ -123,7 +121,7 @@
       btn.textContent = 'Logging in...';
       btn.disabled    = true;
 
-      const hashedPassword = await sha256(pw);
+      const hashedPassword = sha256(pw);
 
       fetch(`${BACKEND}/api/login`, {
         method:  'POST',

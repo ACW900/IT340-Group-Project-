@@ -81,6 +81,8 @@ app.post('/api/register', async (req, res) => {
   try {
     let { fname, lname, username, email, password } = req.body;
 
+    logger.info(`POST /api/register attempt | email:${email} | username:${username}`);
+
     fname    = validator.escape(fname.trim());
     lname    = validator.escape(lname.trim());
     username = validator.escape(username.trim());
@@ -261,3 +263,4 @@ app.post('/api/cache/:key', async (req, res) => {
 app.listen(3000, () => logger.info('Server running on port 3000'));
 
 
+ |
