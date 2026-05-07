@@ -271,7 +271,8 @@
           showError(data.message || 'Registration failed. Please try again.');
           return;
         }
-        localStorage.setItem('ga_user', JSON.stringify({ email, name: username }));
+        // Store id too so wishlist works on index.html
+        localStorage.setItem('ga_user', JSON.stringify({ id: data.user.id, email, name: username }));
         document.getElementById('formView').style.display = 'none';
         document.getElementById('successView').classList.add('visible');
       })

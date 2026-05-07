@@ -183,7 +183,10 @@
 
     async function addToWishlist(gameID, title, thumb) {
       const user = getUser();
-      if (!user || !user.id) return;
+      if (!user || !user.id) {
+        console.warn('addToWishlist: no user id found in localStorage', user);
+        return;
+      }
       try {
         const res  = await fetch(`${BACKEND}/api/wishlist/${user.id}/add`, {
           method:  'POST',

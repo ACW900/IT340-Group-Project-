@@ -14,8 +14,10 @@ const logger = winston.createLogger({
     new winston.transports.Syslog({
       host:     '192.168.199.134',
       port:     514,
-      protocol: 'udp4', 
-      app_name: 'gameatlas'
+      protocol: 'udp4',
+      app_name: 'gameatlas',
+      facility: 'local0',
+      type:     'BSD'
     })
   ]
 });
@@ -262,5 +264,3 @@ app.post('/api/cache/:key', async (req, res) => {
 
 app.listen(3000, () => logger.info('Server running on port 3000'));
 
-
- |
