@@ -139,11 +139,12 @@
 
       <!-- SUCCESS VIEW -->
       <div class="success-screen" id="successView">
-        <div class="success-icon">✓</div>
-        <h2>You're in!</h2>
-        <p>Welcome to GameAtlas. Start searching for games and building your wishlist.</p>
-        <a href="index.html" class="submit-btn" style="display:block;text-decoration:none;text-align:center;padding:0.9rem">
-          Go to homepage →
+        <div class="success-icon">✉</div>
+        <h2>Check your email!</h2>
+        <p>We sent a verification link to your email address. Click it to activate your account.</p>
+        <p style="font-size:0.8rem;color:var(--muted);margin-top:0.5rem;">The link expires in 1 hour.</p>
+        <a href="login.html" class="submit-btn" style="display:block;text-decoration:none;text-align:center;padding:0.9rem;margin-top:1.5rem;">
+          Go to login →
         </a>
       </div>
 
@@ -271,8 +272,7 @@
           showError(data.message || 'Registration failed. Please try again.');
           return;
         }
-        // Store id too so wishlist works on index.html
-        localStorage.setItem('ga_user', JSON.stringify({ id: data.user.id, email, name: username }));
+        // Do NOT store user in localStorage yet — they need to verify first
         document.getElementById('formView').style.display = 'none';
         document.getElementById('successView').classList.add('visible');
       })

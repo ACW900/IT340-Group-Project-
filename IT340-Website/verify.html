@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verify Email — GameAtlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="register.css" />
+</head>
+<body class="auth-body">
+
+  <div class="left-panel register-panel">
+    <div class="grid-bg"></div>
+    <a href="index.html" class="left-logo">Game<span>Atlas</span></a>
+    <div class="left-content">
+      <h2>One last step.</h2>
+      <p>Verifying your email keeps your account secure and lets us send you price drop alerts.</p>
+    </div>
+    <div class="left-footer">© 2025 GameAtlas &nbsp;·&nbsp; Free forever</div>
+  </div>
+
+  <div class="right-panel">
+    <div class="form-container">
+      <div class="success-screen" id="loadingView" style="display:flex">
+        <div class="success-icon" style="font-size:2rem">⏳</div>
+        <h2>Verifying...</h2>
+        <p>Please wait while we verify your email address.</p>
+      </div>
+
+      <div class="success-screen" id="successView">
+        <div class="success-icon">✓</div>
+        <h2>Email verified!</h2>
+        <p>Your account is now active. You can log in to GameAtlas.</p>
+        <a href="login.html" class="submit-btn" style="display:block;text-decoration:none;text-align:center;padding:0.9rem;">
+          Log in →
+        </a>
+      </div>
+
+      <div class="success-screen" id="errorView">
+        <div class="success-icon" style="background:var(--red)">✗</div>
+        <h2>Verification failed</h2>
+        <p id="errorText">This link is invalid or has expired.</p>
+        <a href="register.html" class="submit-btn" style="display:block;text-decoration:none;text-align:center;padding:0.9rem;">
+          Register again →
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const BACKEND = 'http://192.168.199.131';
+
+    const token = new URLSearchParams(window.location.search).get('token');
+
+    function show(id) {
+      ['loadingView','successView','errorView'].forEach(v => {
+        document.getElementById(v).style.display = 'none';
+      });
+      document.getElementById(id).style.display = 'flex';
+    }
+
+    if (!token) {
+      show('errorView');
+      document.getElementById('errorText').textContent = 'No verification token found in the link.';
+    } else {
+      fetch(`${BACKEND}/api/verify?token=${token}`)
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (ok) {
+            show('successView');
+          } else {
+            show('errorView');
+            document.getElementById('errorText').textContent = data.message || 'Verification failed.';
+          }
+        })
+        .catch(() => {
+          show('errorView');
+          document.getElementById('errorText').textContent = 'Could not reach the server.';
+        });
+    }
+  </script>
+</body>
+</html>
