@@ -3,6 +3,8 @@ const mongoose  = require('mongoose');
 const cors      = require('cors');
 const validator = require('validator');
 const winston   = require('winston');
+const nodemailer = require('nodemailer');
+const crypto    = require('crypto');
 require('winston-syslog');
 
 const app = express();
@@ -20,6 +22,15 @@ const logger = winston.createLogger({
       type:     'BSD'
     })
   ]
+});
+
+// ── Mailer ─────────────────────────────────────────────────────────────
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 'gameatlasemail@gmail.com',
+    pass: 'fezq prdj befw hrqy'
+  }
 });
 
 app.use(cors({ origin: 'http://192.168.199.131' }));
@@ -49,11 +60,14 @@ mongoose.connect('mongodb://192.168.199.133:27017/gameatlas')
 
 // ── Schemas ────────────────────────────────────────────────────────────
 const userSchema = new mongoose.Schema({
-  fname:    { type: String, required: true },
-  lname:    { type: String, required: true },
-  username: { type: String, required: true, unique: true },
-  email:    { type: String, required: true, unique: true },
-  password: { type: String, required: true }
+  fname:         { type: String, required: true },
+  lname:         { type: String, required: true },
+  username:      { type: String, required: true, unique: true },
+  email:         { type: String, required: true, unique: true },
+  password:      { type: String, required: true },
+  verified:      { type: Boolean, default: false },
+  verifyToken:   { type: String, default: null },
+  verifyExpires: { type: Date,   default: null }
 });
 const User = mongoose.model('User', userSchema);
 
@@ -64,8 +78,8 @@ const wishlistItemSchema = new mongoose.Schema({
 });
 
 const wishlistSchema = new mongoose.Schema({
-  userId:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
-  games:    { type: [wishlistItemSchema], default: [] }
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+  games:  { type: [wishlistItemSchema], default: [] }
 });
 const Wishlist = mongoose.model('Wishlist', wishlistSchema);
 
@@ -101,16 +115,66 @@ app.post('/api/register', async (req, res) => {
     if (existing)
       return res.status(409).json({ message: 'Email or username already in use.' });
 
-    const user = new User({ fname, lname, username, email, password });
+    // Generate verification token
+    const verifyToken   = crypto.randomBytes(32).toString('hex');
+    const verifyExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    const user = new User({ fname, lname, username, email, password, verifyToken, verifyExpires });
     await user.save();
 
     // Create empty wishlist for new user
     await Wishlist.create({ userId: user._id, games: [] });
 
+    // Send verification email
+    const verifyURL = `http://192.168.199.131/verify.html?token=${verifyToken}`;
+    await transporter.sendMail({
+      from:    '"GameAtlas" <gameatlasemail@gmail.com>',
+      to:      email,
+      subject: 'Verify your GameAtlas account',
+      html: `
+        <h2>Welcome to GameAtlas, ${username}!</h2>
+        <p>Click the button below to verify your email address.</p>
+        <a href="${verifyURL}" style="background:#6c63ff;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;">
+          Verify my account
+        </a>
+        <p>This link expires in 1 hour.</p>
+        <p>If you did not create this account you can ignore this email.</p>
+      `
+    });
+
     logger.info(`POST /api/register → 201 | user:${user._id} | username:${user.username} | ip:${req.ip}`);
-    res.status(201).json({ message: 'Account created successfully.' });
+    res.status(201).json({ message: 'Account created. Please check your email to verify.' });
   } catch (err) {
     logger.error(`POST /api/register → 500 | error:${err.message}`);
+    res.status(500).json({ message: 'Server error.' });
+  }
+});
+
+// ── Verify Email ───────────────────────────────────────────────────────
+app.get('/api/verify', async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token)
+      return res.status(400).json({ message: 'No token provided.' });
+
+    const user = await User.findOne({ verifyToken: token });
+
+    if (!user)
+      return res.status(400).json({ message: 'Invalid or expired token.' });
+
+    if (new Date() > user.verifyExpires)
+      return res.status(400).json({ message: 'Token has expired. Please register again.' });
+
+    user.verified      = true;
+    user.verifyToken   = null;
+    user.verifyExpires = null;
+    await user.save();
+
+    logger.info(`GET /api/verify → 200 | user:${user._id} | username:${user.username} | ip:${req.ip}`);
+    res.json({ message: 'Email verified successfully.' });
+  } catch (err) {
+    logger.error(`GET /api/verify → 500 | error:${err.message}`);
     res.status(500).json({ message: 'Server error.' });
   }
 });
@@ -136,6 +200,12 @@ app.post('/api/login', async (req, res) => {
     if (password !== user.password) {
       logger.warn(`POST /api/login → 401 | user:${user._id} | username:${user.username} | ip:${req.ip}`);
       return res.status(401).json({ message: 'Invalid email or password.' });
+    }
+
+    // Block unverified users
+    if (!user.verified) {
+      logger.warn(`POST /api/login → 403 | user:${user._id} | username:${user.username} | reason:unverified | ip:${req.ip}`);
+      return res.status(403).json({ message: 'Please verify your email before logging in.' });
     }
 
     logger.info(`POST /api/login → 200 | user:${user._id} | username:${user.username} | ip:${req.ip}`);
