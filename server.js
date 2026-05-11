@@ -92,12 +92,19 @@ const Cache = mongoose.model('Cache', cacheSchema);
 
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
+// ── Log helper ─────────────────────────────────────────────────────────
+function maskEmail(email) {
+  const [local, domain] = email.split('@');
+  const masked = local[0] + '***' + local[local.length - 1];
+  return `${masked}@${domain}`;
+}
+
 // ── Register ───────────────────────────────────────────────────────────
 app.post('/api/register', async (req, res) => {
   try {
     let { fname, lname, username, email, password } = req.body;
 
-    logger.info(`POST /api/register attempt | email:${email} | username:${username}`);
+    logger.info(`[REGISTER] attempt | email:${maskEmail(email)} | username:${username} | ip:${req.ip}`);
 
     fname    = validator.escape(fname.trim());
     lname    = validator.escape(lname.trim());
@@ -142,10 +149,10 @@ app.post('/api/register', async (req, res) => {
       `
     });
 
-    logger.info(`POST /api/register → 201 | user:${user._id} | username:${user.username} | ip:${req.ip}`);
+    logger.info(`[REGISTER] success → 201 | user:${user._id} | username:${user.username} | ip:${req.ip}`);
     res.status(201).json({ message: 'Account created. Please check your email to verify.' });
   } catch (err) {
-    logger.error(`POST /api/register → 500 | error:${err.message}`);
+    logger.error(`[REGISTER] error → 500 | error:${err.message} | ip:${req.ip}`);
     res.status(500).json({ message: 'Server error.' });
   }
 });
@@ -171,10 +178,10 @@ app.get('/api/verify', async (req, res) => {
     user.verifyExpires = null;
     await user.save();
 
-    logger.info(`GET /api/verify → 200 | user:${user._id} | username:${user.username} | ip:${req.ip}`);
+    logger.info(`[VERIFY] success → 200 | user:${user._id} | username:${user.username} | ip:${req.ip}`);
     res.json({ message: 'Email verified successfully.' });
   } catch (err) {
-    logger.error(`GET /api/verify → 500 | error:${err.message}`);
+    logger.error(`[VERIFY] error → 500 | error:${err.message} | ip:${req.ip}`);
     res.status(500).json({ message: 'Server error.' });
   }
 });
@@ -183,7 +190,6 @@ app.get('/api/verify', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   try {
     let { email, password } = req.body;
-
     email = email.trim();
 
     if (!validator.isEmail(email))
@@ -193,28 +199,27 @@ app.post('/api/login', async (req, res) => {
 
     const user = await User.findOne({ email });
     if (!user) {
-      logger.warn(`POST /api/login → 401 | user:unknown | username:unknown | ip:${req.ip}`);
+      logger.warn(`[LOGIN] failed → 401 | email:${maskEmail(email)} | reason:user_not_found | ip:${req.ip}`);
       return res.status(401).json({ message: 'Invalid email or password.' });
     }
 
     if (password !== user.password) {
-      logger.warn(`POST /api/login → 401 | user:${user._id} | username:${user.username} | ip:${req.ip}`);
+      logger.warn(`[LOGIN] failed → 401 | user:${user._id} | username:${user.username} | reason:wrong_password | ip:${req.ip}`);
       return res.status(401).json({ message: 'Invalid email or password.' });
     }
 
-    // Block unverified users
     if (!user.verified) {
-      logger.warn(`POST /api/login → 403 | user:${user._id} | username:${user.username} | reason:unverified | ip:${req.ip}`);
+      logger.warn(`[LOGIN] blocked → 403 | user:${user._id} | username:${user.username} | reason:unverified | ip:${req.ip}`);
       return res.status(403).json({ message: 'Please verify your email before logging in.' });
     }
 
-    logger.info(`POST /api/login → 200 | user:${user._id} | username:${user.username} | ip:${req.ip}`);
+    logger.info(`[LOGIN] success → 200 | user:${user._id} | username:${user.username} | ip:${req.ip}`);
     res.json({
       message: 'Login successful.',
       user: { id: user._id, email: user.email, name: user.username }
     });
   } catch (err) {
-    logger.error(`POST /api/login → 500 | error:${err.message}`);
+    logger.error(`[LOGIN] error → 500 | error:${err.message} | ip:${req.ip}`);
     res.status(500).json({ message: 'Server error.' });
   }
 });
